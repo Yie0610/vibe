@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鐵血騎士 3D：銀色榮耀</title>
+    <style>
+        body { margin: 0; background: #a5b1c2; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #ui-layer { position: absolute; top: 0; width: 100%; height: 100%; pointer-events: none; }
+        .hp-container { position: absolute; top: 20px; display: flex; justify-content: space-between; width: 100%; padding: 0 50px; box-sizing: border-box; }
+        .hp-box { width: 320px; height: 35px; background: #fff; border: 3px solid #2f3640; border-radius: 10px; position: relative; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .hp-bar { height: 100%; background: linear-gradient(to right, #ff7675, #d63031); width: 100%; transition: width 0.3s; }
+        .hp-text { position: absolute; width: 100%; text-align: center; color: #2f3640; font-weight: 900; line-height: 35px; font-size: 16px; z-index: 5; }
+        #panel { position: absolute; bottom: 30px; width: 100%; display: flex; flex-direction: column; align-items: center; }
+        #timer-container { width: 600px; height: 15px; background: rgba(0,0,0,0.1); border: 2px solid #fff; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+        #timer-bar { height: 100%; background: #fbc531; width: 100%; }
+        #sequence { display: flex; gap: 15px; height: 70px; }
+        .key { width: 60px; height: 60px; background: white; border: 3px solid #2f3640; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 30px; transition: 0.1s; box-shadow: 0 4px 0 #2f3640; }
+        .key.active { transform: scale(1.2); border-color: #3498db; box-shadow: 0 0 20px rgba(52, 152, 219, 0.6); }
+        .key.done { opacity: 0; transform: translateY(-30px); }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; pointer-events: auto; }
+        h1 { font-size: 70px; color: #2f3640; margin: 0; letter-spacing: 5px; }
+        button { padding: 20px 60px; font-size: 28px; background: #2d98da; color: white; border: none; border-radius: 50px; cursor: pointer; font-weight: bold; box-shadow: 0 6px 0 #3867d6; transition: 0.1s; }
+        button:active { transform: translateY(4px); box-shadow: 0 2px 0 #3867d6; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="hp-container">
+            <div class="hp-box"><div id="p-hp-bar" class="hp-bar"></div><div class="hp-text">銀翼玩家 HP: <span id="p-hp-val">10</span></div></div>
+            <div class="hp-box"><div id="e-hp-bar" class="hp-bar"></div><div class="hp-text">鋼鐵敵將 HP: <span id="e-hp-val">10</span></div></div>
+        </div>
+        <div id="panel">
+            <div id="timer-container"><div id="timer-bar"></div></div>
+            <div id="sequence"></div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h1>銀色榮耀</h1>
+        <p style="font-size: 20px; color: #7f8c8d; margin-bottom: 40px;">身披銀甲，在日光下贏得勝利</p>
+        <button id="start-btn">開始決鬥</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xd1d8e0);
+        scene.fog = new THREE.Fog(0xd1d8e0, 20, 100);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // 強力光源以凸顯銀色質感
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); 
+        scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2); 
+        sunLight.position.set(5, 15, 10);
+        sunLight.castShadow = true;
+        scene.add(sunLight);
+
+        // 地面
+        const ground = new THREE.Mesh(new THREE.CircleGeometry(50, 32), new THREE.MeshStandardMaterial({ color: 0x778ca3 }));
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // --- 銀色騎士模型 ---
+        function createKnight(isPlayer) {
+            const group = new THREE.Group();
+            
+            // 銀色盔甲材質：高金屬度、低粗糙度
+            const silverMat = new THREE.MeshStandardMaterial({ 
+                color: 0xe0e0e0, // 基礎淺灰色
+                metalness: 1.0,  // 完全金屬感
+                roughness: 0.15  // 具備鏡面反光效果
+            });
+
+            // 軀幹
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.35, 1.3, 8), silverMat);
+            body.position.y = 1.65;
+            body.castShadow = true;
+            group.add(body);
+
+            // 頭盔
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), silverMat);
+            head.position.y = 2.45;
+            head.castShadow = true;
+            group.add(head);
+
+            // 手臂
+            const armGroup = new THREE.Group();
+            const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.0), silverMat);
+            arm.position.y = -0.4;
+            armGroup.add(arm);
+            armGroup.position.set(0.6, 2.2, 0);
+            group.add(armGroup);
+
+            // 銀劍
+            const sword = new THREE.Group();
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.5, 0.18), new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 1, roughness: 0.05}));
+            blade.position.y = 0.7;
+            sword.add(blade);
+            const cross = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, 0.1), new THREE.MeshStandardMaterial({color: 0xd1d8e0, metalness: 1}));
+            sword.add(cross);
+            sword.position.y = -0.9;
+            sword.rotation.x = Math.PI / 2;
+            armGroup.add(sword);
+
+            // 腿
+            const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 1.1), silverMat);
+            legL.position.set(-0.25, 0.55, 0);
+            group.add(legL);
+            const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 1.1), silverMat);
+            legR.position.set(0.25, 0.55, 0);
+            group.add(legR);
+
+            // 披風
+            const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.0), new THREE.MeshStandardMaterial({ color: isPlayer ? 0x4b7bec : 0xeb3b5a, side: THREE.DoubleSide }));
+            cape.position.set(0, 1.5, -0.35);
+            cape.rotation.x = 0.15;
+            group.add(cape);
+
+            return { group, armGroup };
+        }
+
+        const player = createKnight(true);
+        const enemy = createKnight(false);
+        scene.add(player.group);
+        scene.add(enemy.group);
+
+        camera.position.set(0, 3.5, 6);
+        camera.lookAt(0, 1.5, -5);
+
+        player.group.position.z = 2.5;
+        enemy.group.position.z = -3.5;
+        enemy.group.rotation.y = Math.PI;
+
+        // --- 邏輯 ---
+        const KEY_MAP = { ' ': '🛡️', 'ArrowUp': '⬆️', 'ArrowLeft': '⬅️', 'ArrowRight': '➡️' };
+        let playerHP = 10, enemyHP = 10, currentLevel = 1;
+        let sequence = [], currentIndex = 0, timeLeft = 5000, isPlaying = false, lastTime = 0;
+
+        function handleResult(win) {
+            isPlaying = false;
+            if (win) {
+                enemyHP--;
+                attackAnim(player);
+                shakeAnim(enemy);
+            } else {
+                playerHP--;
+                attackAnim(enemy);
+                shakeAnim(player);
+            }
+            updateHPUI();
+            if (playerHP <= 0 || enemyHP <= 0) {
+                if (playerHP <= 0) fallAnim(player);
+                if (enemyHP <= 0) fallAnim(enemy);
+                setTimeout(() => {
+                    document.getElementById('overlay').classList.remove('hidden');
+                    document.getElementById('overlay').querySelector('h1').innerText = playerHP > 0 ? "凱旋歸來" : "榮譽戰死";
+                }, 1500);
+            } else {
+                currentLevel++;
+                setTimeout(() => {
+                    currentIndex = 0; timeLeft = 5000;
+                    const count = 2 + Math.min(currentLevel, 8);
+                    sequence = Array.from({length: count}, () => Object.keys(KEY_MAP)[Math.floor(Math.random() * 4)]);
+                    renderSequence();
+                    isPlaying = true; lastTime = performance.now();
+                }, 1200);
+            }
+        }
+
+        function updateHPUI() {
+            document.getElementById('p-hp-val').innerText = playerHP;
+            document.getElementById('e-hp-val').innerText = enemyHP;
+            document.getElementById('p-hp-bar').style.width = (playerHP * 10) + '%';
+            document.getElementById('e-hp-bar').style.width = (enemyHP * 10) + '%';
+        }
+
+        function renderSequence() {
+            const container = document.getElementById('sequence');
+            container.innerHTML = '';
+            sequence.forEach((key, i) => {
+                const div = document.createElement('div');
+                div.className = 'key' + (i === 0 ? ' active' : '');
+                div.innerText = KEY_MAP[key];
+                container.appendChild(div);
+            });
+        }
+
+        function attackAnim(target) {
+            const arm = target.armGroup;
+            let step = 0;
+            const originalRot = arm.rotation.x;
+            const interval = setInterval(() => {
+                step += 0.3;
+                arm.rotation.x = originalRot - Math.sin(step) * 1.6;
+                if (step >= Math.PI) { arm.rotation.x = originalRot; clearInterval(interval); }
+            }, 20);
+        }
+
+        function shakeAnim(target) {
+            const g = target.group;
+            let step = 0;
+            const originalX = g.position.x;
+            const interval = setInterval(() => {
+                step += 0.8;
+                g.position.x = originalX + Math.sin(step) * 0.25;
+                if (step >= Math.PI * 4) { g.position.x = originalX; clearInterval(interval); }
+            }, 20);
+        }
+
+        function fallAnim(target) {
+            let step = 0;
+            const g = target.group;
+            const interval = setInterval(() => {
+                step += 0.05;
+                g.rotation.z = step * Math.PI / 2.2;
+                g.position.y = Math.max(0.5, 2 - step * 2.5);
+                if (step >= 1) clearInterval(interval);
+            }, 20);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (!isPlaying) return;
+            if (e.key === ' ') e.preventDefault();
+            if (!KEY_MAP[e.key]) return;
+            if (e.key === sequence[currentIndex]) {
+                document.querySelectorAll('.key')[currentIndex].classList.add('done');
+                currentIndex++;
+                attackAnim(player);
+                if (currentIndex >= sequence.length) handleResult(true);
+                else document.querySelectorAll('.key')[currentIndex].classList.add('active');
+            } else {
+                handleResult(false);
+            }
+        });
+
+        document.getElementById('start-btn').onclick = () => {
+            playerHP = 10; enemyHP = 10; currentLevel = 1;
+            player.group.rotation.z = 0; player.group.position.y = 0;
+            enemy.group.rotation.z = 0; enemy.group.position.y = 0;
+            updateHPUI();
+            document.getElementById('overlay').classList.add('hidden');
+            currentIndex = 0; timeLeft = 5000;
+            sequence = Array.from({length: 3}, () => Object.keys(KEY_MAP)[Math.floor(Math.random() * 4)]);
+            renderSequence();
+            isPlaying = true; lastTime = performance.now();
+        };
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            const breath = Math.sin(time / 450) * 0.04;
+            if (playerHP > 0) player.group.position.y = breath;
+            if (enemyHP > 0) enemy.group.position.y = breath;
+            if (isPlaying) {
+                const dt = time - lastTime;
+                lastTime = time;
+                timeLeft -= dt;
+                document.getElementById('timer-bar').style.width = Math.max(0, (timeLeft / 5000) * 100) + '%';
+                if (timeLeft <= 0) handleResult(false);
+            }
+            renderer.render(scene, camera);
+        }
+        animate(0);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

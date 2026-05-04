@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星際英打神槍手 (極速飆升挑戰版)</title>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background-color: #0a0a0a; color: white;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+        }
+        h1 { margin-top: 10px; font-size: 24px; color: #00ffcc; text-shadow: 0 0 10px #00ffcc; font-family: 'Segoe UI', sans-serif;}
+        
+        /* 16:9 響應式遊戲畫面設定 */
+        canvas {
+            background-color: #050510;
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+            border-radius: 8px; 
+            border: 2px solid #222;
+            width: 100%;
+            max-width: 1280px; 
+            aspect-ratio: 16 / 9; 
+        }
+        
+        .instructions { margin-top: 10px; margin-bottom: 10px; color: #aaa; font-size: 14px; text-align: center; line-height: 1.5; font-family: 'Segoe UI', sans-serif;}
+        .highlight { color: #ffcc00; font-weight: bold; }
+        .ult-text { color: #ff3366; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>⌨️ 星際英打神槍手：極速飆升版 🚀</h1>
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+    <div class="instructions">
+        操作：輸入敵人頭頂的英文單字發射雷射！<br>
+        <span class="highlight">💡 每個單字最多出現 2 次！每 300 分難度就會飆升，注意你的 WPM！</span><br>
+        <span class="ult-text">⚡ 能量滿 100% 時，按下 [Enter] 鍵施放全畫面清空大絕招！ ⚡</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // === 音效系統 ===
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); }
+
+        function playTone(freq, type, duration, vol=0.05, slideFreq=0) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            if(slideFreq > 0) osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+            gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playShootSound() { playTone(800, 'square', 0.05, 0.03, 1200); }
+        function playExplosionSound() { playTone(100, 'sawtooth', 0.2, 0.1, 20); }
+        function playErrorSound() { playTone(150, 'triangle', 0.15, 0.08); } 
+        function playHitPlayerSound() { playTone(100, 'square', 0.4, 0.15, 40); }
+        function playUltimateSound() { 
+            playTone(300, 'sawtooth', 1.5, 0.2, 50); 
+            setTimeout(() => playTone(100, 'square', 2.0, 0.3, 20), 100); 
+        }
+
+        // === 超巨量中英文單字庫字典 (180+ 字) ===
+        const wordList = [
+            { en: "ai", zh: "人工智慧" }, { en: "bot", zh: "機器人" }, { en: "bug", zh: "程式錯誤" },
+            { en: "cpu", zh: "處理器" }, { en: "ram", zh: "記憶體" }, { en: "net", zh: "網路" },
+            { en: "web", zh: "全球資訊網" }, { en: "app", zh: "應用程式" }, { en: "code", zh: "程式碼" },
+            { en: "data", zh: "資料" }, { en: "file", zh: "檔案" }, { en: "hack", zh: "駭客入侵" },
+            { en: "host", zh: "主機" }, { en: "java", zh: "Java語言" }, { en: "loop", zh: "迴圈" },
+            { en: "node", zh: "節點" }, { en: "port", zh: "通訊埠" }, { en: "root", zh: "最高權限" },
+            { en: "cloud", zh: "雲端" }, { en: "cache", zh: "快取" }, { en: "query", zh: "查詢" },
+            { en: "function", zh: "函式" }, { en: "variable", zh: "變數" }, { en: "object", zh: "物件" },
+            { en: "array", zh: "陣列" }, { en: "string", zh: "字串" }, { en: "boolean", zh: "布林值" },
+            { en: "integer", zh: "整數" }, { en: "logic", zh: "邏輯" }, { en: "compile", zh: "編譯" },
+            { en: "syntax", zh: "語法" }, { en: "debug", zh: "除錯" }, { en: "memory", zh: "記憶體" },
+            { en: "browser", zh: "瀏覽器" }, { en: "router", zh: "路由器" }, { en: "switch", zh: "交換器" },
+            { en: "encrypt", zh: "加密" }, { en: "decrypt", zh: "解密" }, { en: "robotics", zh: "機器人學" },
+            { en: "alien", zh: "外星人" }, { en: "space", zh: "太空" }, { en: "laser", zh: "雷射" },
+            { en: "fleet", zh: "艦隊" }, { en: "orbit", zh: "軌道" }, { en: "planet", zh: "行星" },
+            { en: "galaxy", zh: "星系" }, { en: "system", zh: "系統" }, { en: "astronaut", zh: "太空人" },
+            { en: "universe", zh: "宇宙" }, { en: "eclipse", zh: "日/月蝕" }, { en: "meteor", zh: "流星" },
+            { en: "gravity", zh: "重力" }, { en: "shuttle", zh: "太空梭" }, { en: "vacuum", zh: "真空" },
+            { en: "nebula", zh: "星雲" }, { en: "blackhole", zh: "黑洞" }, { en: "comet", zh: "彗星" },
+            { en: "satellite", zh: "衛星" }, { en: "telescope", zh: "望遠鏡" }, { en: "quantum", zh: "量子" },
+            { en: "photon", zh: "光子" }, { en: "electron", zh: "電子" }, { en: "proton", zh: "質子" },
+            { en: "neutron", zh: "中子" }, { en: "molecule", zh: "分子" }, { en: "element", zh: "元素" },
+            { en: "market", zh: "市場" }, { en: "finance", zh: "金融" }, { en: "economy", zh: "經濟" },
+            { en: "budget", zh: "預算" }, { en: "profit", zh: "利潤" }, { en: "invest", zh: "投資" },
+            { en: "capital", zh: "資本" }, { en: "startup", zh: "新創公司" }, { en: "strategy", zh: "策略" },
+            { en: "revenue", zh: "營收" }, { en: "asset", zh: "資產" }, { en: "contract", zh: "合約" },
+            { en: "biology", zh: "生物學" }, { en: "ecology", zh: "生態學" }, { en: "physics", zh: "物理學" },
+            { en: "chemistry", zh: "化學" }, { en: "climate", zh: "氣候" }, { en: "carbon", zh: "碳" },
+            { en: "oxygen", zh: "氧氣" }, { en: "energy", zh: "能源" }, { en: "solar", zh: "太陽能" },
+            { en: "nature", zh: "自然" }, { en: "fossil", zh: "化石" }, { en: "species", zh: "物種" },
+            { en: "health", zh: "健康" }, { en: "medical", zh: "醫療" }, { en: "disease", zh: "疾病" },
+            { en: "vaccine", zh: "疫苗" }, { en: "symptom", zh: "症狀" }, { en: "therapy", zh: "治療" },
+            { en: "virus", zh: "病毒" }, { en: "cyber", zh: "網路的" }, { en: "pixel", zh: "像素" },
+            { en: "hacker", zh: "駭客" }, { en: "server", zh: "伺服器" }, { en: "matrix", zh: "矩陣" },
+            { en: "network", zh: "網路" }, { en: "firewall", zh: "防火牆" }, { en: "database", zh: "資料庫" },
+            { en: "keyboard", zh: "鍵盤" }, { en: "software", zh: "軟體" }, { en: "hardware", zh: "硬體" },
+            { en: "cybersecurity", zh: "網路安全" }, { en: "algorithm", zh: "演算法" },
+            { en: "challenge", zh: "挑戰" }, { en: "extreme", zh: "極限" }, { en: "ultimate", zh: "終極" },
+            { en: "typing", zh: "打字" }, { en: "master", zh: "大師" }, { en: "legend", zh: "傳說" },
+            { en: "champion", zh: "冠軍" }, { en: "victory", zh: "勝利" }, { en: "defeat", zh: "失敗" },
+            { en: "extraterrestrial", zh: "外星生物" },
+            { en: "tiger", zh: "老虎" }, { en: "lion", zh: "獅子" }, { en: "bear", zh: "熊" },
+            { en: "shark", zh: "鯊魚" }, { en: "eagle", zh: "老鷹" }, { en: "wolf", zh: "狼" },
+            { en: "snake", zh: "蛇" }, { en: "whale", zh: "鯨魚" }, { en: "river", zh: "河流" },
+            { en: "ocean", zh: "海洋" }, { en: "storm", zh: "暴風雨" }, { en: "forest", zh: "森林" },
+            { en: "mountain", zh: "高山" }, { en: "desert", zh: "沙漠" }, { en: "island", zh: "島嶼" },
+            { en: "stone", zh: "石頭" }, { en: "thunder", zh: "雷聲" }, { en: "lightning", zh: "閃電" },
+            { en: "apple", zh: "蘋果" }, { en: "bread", zh: "麵包" }, { en: "water", zh: "水" },
+            { en: "juice", zh: "果汁" }, { en: "pizza", zh: "披薩" }, { en: "sushi", zh: "壽司" },
+            { en: "candy", zh: "糖果" }, { en: "cheese", zh: "起司" }, { en: "glass", zh: "玻璃" },
+            { en: "paper", zh: "紙張" }, { en: "metal", zh: "金屬" }, { en: "plastic", zh: "塑膠" },
+            { en: "phone", zh: "手機" }, { en: "clock", zh: "時鐘" }, { en: "screen", zh: "螢幕" },
+            { en: "chair", zh: "椅子" },
+            { en: "attack", zh: "攻擊" }, { en: "defend", zh: "防禦" }, { en: "sprint", zh: "衝刺" },
+            { en: "dodge", zh: "閃避" }, { en: "strike", zh: "打擊" }, { en: "block", zh: "格擋" },
+            { en: "parry", zh: "招架" }, { en: "shoot", zh: "射擊" }, { en: "brain", zh: "大腦" },
+            { en: "heart", zh: "心臟" }, { en: "blood", zh: "血液" }, { en: "muscle", zh: "肌肉" },
+            { en: "bone", zh: "骨骼" }, { en: "skin", zh: "皮膚" }, { en: "nerve", zh: "神經" },
+            { en: "quick", zh: "快速的" }, { en: "fast", zh: "快的" }, { en: "slow", zh: "慢的" },
+            { en: "smart", zh: "聰明的" }, { en: "brave", zh: "勇敢的" }, { en: "silent", zh: "沉默的" },
+            { en: "loud", zh: "大聲的" }, { en: "strong", zh: "強壯的" }
+        ];
+
+        let wordUsageCount = {};
+
+        // === 遊戲核心狀態 ===
+        let score = 0;
+        let level = 1;       
+        let lives = 5; 
+        let combo = 0;       
+        let maxCombo = 0;    
+        let isGameOver = false;
+        let frames = 0;
+        let spawnRate = 120; 
+        let screenShake = 0;
+        let ultimateFlash = 0; 
+
+        // === 大絕招系統 ===
+        let energy = 0;
+        const maxEnergy = 100;
+
+        // === WPM 測速系統 ===
+        let typedTimestamps = []; 
+        let currentWpm = 0;
+        let maxWpm = 0;
+        const maxDisplayWpm = 120; 
+
+        const stars = Array.from({ length: 300 }, () => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            speed: Math.random() * 2 + 0.5,
+            size: Math.random() * 2.5
+        }));
+
+        let player = { x: canvas.width / 2, y: canvas.height - 40, width: 40, height: 40, color: '#00ffcc', hitFlash: 0 };
+
+        let enemies = [];
+        let particles = [];
+        let lasers = []; 
+        let floatingTexts = []; 
+        let currentTarget = null; 
+
+        function checkLevelUp() {
+            // 【難度升級調整】升級門檻降為 300 分
+            let newLevel = Math.floor(score / 300) + 1;
+            if (newLevel > level) {
+                level = newLevel;
+                floatingTexts.push({ x: canvas.width / 2, y: canvas.height / 2 - 100, text: `LEVEL UP! 進入第 ${level} 級`, life: 100, color: '#ffcc00', size: 36 });
+                playTone(500, 'sine', 0.5, 0.1, 1000); 
+            }
+        }
+
+        function triggerUltimate() {
+            energy = 0;
+            playUltimateSound();
+            screenShake = 50;     
+            ultimateFlash = 30;   
+
+            enemies.forEach(e => {
+                score += e.word.length * 5;
+                createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, 3);
+            });
+            
+            enemies = [];
+            currentTarget = null;
+            floatingTexts.push({ x: canvas.width/2, y: canvas.height/2, text: "ULTIMATE CLEAR!", life: 80, color: '#cc33ff', size: 50 });
+            checkLevelUp(); 
+        }
+
+        function spawnEnemy() {
+            let availableWords = wordList.filter(w => {
+                let noConflict = !enemies.some(e => e.word.charAt(0) === w.en.charAt(0));
+                let underLimit = (wordUsageCount[w.en] || 0) < 2; 
+                return noConflict && underLimit;
+            });
+
+            if (availableWords.length === 0) {
+                availableWords = wordList.filter(w => (wordUsageCount[w.en] || 0) < 2);
+                if (availableWords.length === 0) {
+                    wordUsageCount = {}; 
+                    availableWords = wordList.filter(w => !enemies.some(e => e.word.charAt(0) === w.en.charAt(0)));
+                    if (availableWords.length === 0) availableWords = wordList; 
+                }
+            }
+
+            let randomObj = availableWords[Math.floor(Math.random() * availableWords.length)];
+            wordUsageCount[randomObj.en] = (wordUsageCount[randomObj.en] || 0) + 1;
+            
+            let len = randomObj.en.length;
+            let eWidth = 20 + (len * 8); 
+            let eHeight = 20 + (len * 3); 
+            
+            let type = Math.floor(Math.random() * 3);
+            
+            // 【難度升級調整】速度加成從 0.02 提升到 0.05，戰機型敵人倍率提高為 1.4
+            let speed = Math.random() * 0.2 + 0.3 + (level * 0.05);
+            if (type === 2) speed *= 1.4; 
+
+            enemies.push({
+                x: Math.max(eWidth/2 + 10, Math.random() * (canvas.width - eWidth - 20)),
+                y: -eHeight - 60,
+                width: eWidth, 
+                height: eHeight,
+                word: randomObj.en,
+                zh: randomObj.zh, 
+                typedIndex: 0,
+                speed: speed,
+                type: type,
+                baseX: 0, 
+                tick: Math.random() * 100,
+                color: type === 0 ? '#ff3366' : (type === 1 ? '#00bbff' : '#ff5500')
+            });
+            enemies[enemies.length-1].baseX = enemies[enemies.length-1].x;
+        }
+
+        function createExplosion(x, y, color, sizeMultiplier = 1) {
+            playExplosionSound();
+            let amount = 20 * sizeMultiplier;
+            for (let i = 0; i < amount; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 0.5) * 12,
+                    life: 20 + Math.random() * 20, color: color
+                });
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            initAudio(); 
+            if (isGameOver) return;
+            
+            if (e.key === 'Enter') {
+                if (energy >= maxEnergy) triggerUltimate();
+                return;
+            }
+            
+            if (e.key.length === 1 && e.key.match(/[a-z]/i)) {
+                let char = e.key.toLowerCase();
+                let hitSuccess = false;
+                
+                if (currentTarget) {
+                    if (char === currentTarget.word.charAt(currentTarget.typedIndex)) {
+                        hitSuccess = true;
+                        currentTarget.typedIndex++;
+                        combo++; 
+                        if (combo > maxCombo) maxCombo = combo;
+                        playShootSound();
+                        
+                        lasers.push({
+                            startX: player.x, startY: player.y - 20,
+                            endX: currentTarget.x + currentTarget.width/2, endY: currentTarget.y + currentTarget.height/2,
+                            life: 5 
+                        });
+
+                        if (currentTarget.typedIndex === currentTarget.word.length) {
+                            let comboMultiplier = 1 + Math.floor(combo / 10) * 0.5;
+                            let earnedScore = Math.floor(currentTarget.word.length * 10 * comboMultiplier);
+                            score += earnedScore;
+                            
+                            energy = Math.min(maxEnergy, energy + 10);
+                            
+                            floatingTexts.push({ 
+                                x: currentTarget.x + currentTarget.width/2, y: currentTarget.y, 
+                                text: `+${earnedScore}`, life: 40, color: combo > 10 ? '#ff5500' : '#ffcc00', size: combo > 10 ? 24 : 16 
+                            });
+                            createExplosion(currentTarget.x + currentTarget.width/2, currentTarget.y + currentTarget.height/2, currentTarget.color, currentTarget.word.length / 4);
+                            
+                            enemies = enemies.filter(enemy => enemy !== currentTarget);
+                            currentTarget = null;
+                            
+                            checkLevelUp(); 
+                        }
+                    } else {
+                        combo = 0;
+                        playErrorSound();
+                        player.hitFlash = 5;
+                        screenShake = 5; 
+                    }
+                } else {
+                    let potentialTargets = enemies.filter(enemy => enemy.word.charAt(0) === char);
+                    if (potentialTargets.length > 0) {
+                        potentialTargets.sort((a, b) => b.y - a.y);
+                        currentTarget = potentialTargets[0];
+                        currentTarget.typedIndex = 1;
+                        combo++;
+                        hitSuccess = true;
+                        playShootSound();
+                        lasers.push({ startX: player.x, startY: player.y - 20, endX: currentTarget.x + currentTarget.width/2, endY: currentTarget.y + currentTarget.height/2, life: 5 });
+                    } else {
+                        combo = 0;
+                        playErrorSound();
+                        screenShake = 5;
+                    }
+                }
+
+                if (hitSuccess) {
+                    typedTimestamps.push(Date.now());
+                }
+            }
+        });
+
+        function takeDamage() {
+            playHitPlayerSound(); 
+            screenShake = 20; 
+            combo = 0; 
+            for(let i=0; i<40; i++){
+                particles.push({ x: player.x, y: player.y, vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 0.5) * 15, life: 40, color: '#ff0000' });
+            }
+            lives--;
+            player.hitFlash = 15;
+            
+            enemies = []; 
+            currentTarget = null;
+
+            if (lives <= 0) {
+                isGameOver = true;
+                screenShake = 0; 
+            } else {
+                for(let i=0; i<4; i++) spawnEnemy();
+                floatingTexts.push({ x: canvas.width/2, y: canvas.height/2, text: "防線已重置！", life: 60, color: '#ff3366', size: 28 });
+            }
+        }
+
+        function update() {
+            frames++;
+            
+            if (screenShake > 0 && !isGameOver) screenShake--; 
+            if (ultimateFlash > 0) ultimateFlash--;
+            particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life--; return p.life > 0; });
+            floatingTexts = floatingTexts.filter(ft => { ft.y -= 1; ft.life--; return ft.life > 0; });
+            lasers = lasers.filter(l => { l.life--; return l.life > 0; });
+            
+            if (isGameOver) return; 
+
+            let now = Date.now();
+            typedTimestamps = typedTimestamps.filter(t => now - t < 10000); 
+            currentWpm = (typedTimestamps.length / 5) * 6;
+            if (currentWpm > maxWpm) maxWpm = currentWpm;
+
+            // 【難度升級調整】生成間隔縮短得更快，每級減少 8 (原本 4)，最低 35 (原本 50)
+            let currentSpawnRate = Math.max(35, spawnRate - (level * 8));
+            if (frames % currentSpawnRate === 0) spawnEnemy();
+
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) { star.y = 0; star.x = Math.random() * canvas.width; }
+            });
+
+            if (player.hitFlash > 0) player.hitFlash--;
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                if(!e) continue;
+                
+                e.y += e.speed;
+                
+                if (e.type === 1) {
+                    e.tick += 0.05;
+                    e.x = e.baseX + Math.sin(e.tick) * 40; 
+                    e.x = Math.max(10, Math.min(canvas.width - e.width - 10, e.x));
+                }
+
+                if (e.y + e.height >= canvas.height - 20) {
+                    takeDamage(); 
+                    break; 
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            if (screenShake > 0 && !isGameOver) {
+                let dx = (Math.random() - 0.5) * screenShake;
+                let dy = (Math.random() - 0.5) * screenShake;
+                ctx.translate(dx, dy);
+            }
+
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(s => {
+                ctx.globalAlpha = Math.random() * 0.5 + 0.5;
+                ctx.fillRect(s.x, s.y, s.size, s.size);
+            });
+            ctx.globalAlpha = 1.0;
+
+            if (!isGameOver) {
+                ctx.fillStyle = player.hitFlash > 0 ? '#ff0000' : player.color;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y - 20); 
+                ctx.lineTo(player.x - 20, player.y + 20); 
+                ctx.lineTo(player.x + 20, player.y + 20); 
+                ctx.fill();
+                ctx.fillStyle = '#222';
+                ctx.fillRect(player.x - 10, player.y + 10, 20, 15);
+
+                lasers.forEach(l => {
+                    ctx.strokeStyle = '#00ffcc';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(l.startX, l.startY);
+                    ctx.lineTo(l.endX, l.endY);
+                    ctx.stroke();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(l.startX, l.startY);
+                    ctx.lineTo(l.endX, l.endY);
+                    ctx.stroke();
+                });
+
+                enemies.forEach(e => { 
+                    let drawColor = (e === currentTarget) ? '#ffcc00' : e.color;
+                    ctx.fillStyle = drawColor;
+                    
+                    if (e.type === 0) {
+                        ctx.fillRect(e.x, e.y, e.width, e.height);
+                        ctx.fillStyle = '#111';
+                        ctx.fillRect(e.x + 5, e.y + 5, 8, 8);
+                        ctx.fillRect(e.x + e.width - 13, e.y + 5, 8, 8);
+                    } else if (e.type === 1) {
+                        ctx.beginPath();
+                        ctx.ellipse(e.x + e.width/2, e.y + e.height/2, e.width/2, e.height/2.5, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#111';
+                        ctx.beginPath();
+                        ctx.arc(e.x + e.width/2, e.y + e.height/3, e.width/4, 0, Math.PI, true);
+                        ctx.fill();
+                    } else if (e.type === 2) {
+                        ctx.beginPath();
+                        ctx.moveTo(e.x, e.y);
+                        ctx.lineTo(e.x + e.width, e.y);
+                        ctx.lineTo(e.x + e.width/2, e.y + e.height);
+                        ctx.fill();
+                        ctx.fillStyle = '#ffff00';
+                        ctx.fillRect(e.x + e.width/2 - 5, e.y - 8, 10, 8);
+                    }
+                });
+
+                enemies.forEach(e => {
+                    let wordY = e.y - 20; 
+                    let typedPart = e.word.substring(0, e.typedIndex);
+                    let untypedPart = e.word.substring(e.typedIndex);
+                    
+                    ctx.font = 'bold 18px Consolas';
+                    let typedWidth = ctx.measureText(typedPart).width;
+                    let untypedWidth = ctx.measureText(untypedPart).width;
+                    let totalWidth = typedWidth + untypedWidth;
+                    let startX = e.x + e.width / 2 - totalWidth / 2;
+
+                    ctx.textAlign = 'left';
+                    ctx.lineJoin = 'round';
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#000000'; 
+                    ctx.strokeText(typedPart, startX, wordY);
+                    ctx.fillStyle = '#00ffcc'; 
+                    ctx.fillText(typedPart, startX, wordY);
+                    
+                    let isHighCombo = (e === currentTarget && combo > 10 && frames % 10 < 5);
+                    ctx.fillStyle = (e === currentTarget) ? (isHighCombo ? '#ffffff' : '#ffcc00') : 'white';
+                    ctx.strokeText(untypedPart, startX + typedWidth, wordY);
+                    ctx.fillText(untypedPart, startX + typedWidth, wordY);
+
+                    let zhY = e.y - 4; 
+                    ctx.textAlign = 'center';
+                    ctx.font = '13px "Segoe UI", sans-serif';
+                    ctx.lineWidth = 3;
+                    ctx.strokeText(e.zh, e.x + e.width/2, zhY); 
+                    ctx.fillStyle = '#dddddd';
+                    ctx.fillText(e.zh, e.x + e.width/2, zhY);
+                    ctx.textAlign = 'left'; 
+                });
+
+            } else {
+                ctx.fillStyle = '#ff3366';
+                ctx.font = 'bold 60px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 60);
+                
+                ctx.fillStyle = '#00ffcc';
+                ctx.font = 'bold 32px Arial';
+                ctx.fillText(`最終得分: ${score}`, canvas.width / 2, canvas.height / 2 - 10);
+                
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = '26px Arial';
+                ctx.fillText(`最高 WPM 速度: ${Math.round(maxWpm)}`, canvas.width / 2, canvas.height / 2 + 30);
+
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.fillText(`你成功晉級到了第 ${level} 級`, canvas.width / 2, canvas.height / 2 + 70);
+                
+                ctx.font = '18px Arial';
+                ctx.fillStyle = '#888';
+                ctx.fillText('按 F5 或重新整理網頁再次挑戰', canvas.width / 2, canvas.height / 2 + 120);
+                ctx.textAlign = 'left'; 
+            }
+
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 40; ctx.fillRect(p.x, p.y, 4, 4); });
+            ctx.globalAlpha = 1.0;
+
+            floatingTexts.forEach(ft => { 
+                ctx.textAlign = 'center';
+                ctx.font = `bold ${ft.size || 16}px Arial`; 
+                ctx.fillStyle = ft.color; 
+                ctx.globalAlpha = ft.life / 40; 
+                ctx.fillText(ft.text, ft.x, ft.y); 
+                ctx.textAlign = 'left';
+            });
+            ctx.globalAlpha = 1.0;
+
+            // --- UI 狀態列 ---
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fillRect(0, 0, canvas.width, 80);
+
+            ctx.fillStyle = '#00ffcc';
+            ctx.font = 'bold 22px Arial';
+            ctx.fillText(`SCORE: ${score}`, 20, 28);
+            
+            if (combo > 0 && !isGameOver) {
+                ctx.fillStyle = combo > 10 ? '#ff5500' : '#ffcc00';
+                let comboSize = combo > 10 ? 26 : 20;
+                ctx.font = `bold ${comboSize}px Arial`;
+                ctx.fillText(`COMBO x${combo}`, 220, 28);
+            }
+            
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText(`LEVEL ${level}`, canvas.width / 2, 28);
+            ctx.textAlign = 'left';
+            
+            ctx.fillStyle = '#ff3366';
+            let livesText = "❤️".repeat(Math.max(0, lives));
+            ctx.font = '20px Arial';
+            ctx.fillText(`${livesText}`, canvas.width - 180, 28);
+
+            // =========================
+            // WPM 速度追蹤條
+            // =========================
+            let wpmBarY = 38;
+            let barH = 16; 
+            
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+            ctx.fillRect(0, wpmBarY, canvas.width, barH);
+            
+            let wpmWidth = Math.min(canvas.width, (currentWpm / maxDisplayWpm) * canvas.width);
+            ctx.fillStyle = currentWpm > 80 ? '#ff3366' : (currentWpm > 40 ? '#ffcc00' : '#00ffcc');
+            ctx.fillRect(0, wpmBarY, wpmWidth, barH);
+            
+            let bestLineX = Math.min(canvas.width - 2, (maxWpm / maxDisplayWpm) * canvas.width);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(bestLineX, wpmBarY, 3, barH); 
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 15px Arial';
+            let bestWpmStr = `MAX: ${Math.round(maxWpm)}`;
+            
+            if (bestLineX > canvas.width - 80) {
+                ctx.textAlign = 'right';
+                ctx.fillText(bestWpmStr, bestLineX - 8, wpmBarY + 13);
+            } else {
+                ctx.textAlign = 'left';
+                ctx.fillText(bestWpmStr, bestLineX + 10, wpmBarY + 13);
+            }
+            
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 16px Arial';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#000000'; 
+            ctx.strokeText(`WPM: ${Math.round(currentWpm)}`, 10, wpmBarY + 14);
+            ctx.fillStyle = '#ffffff';   
+            ctx.fillText(`WPM: ${Math.round(currentWpm)}`, 10, wpmBarY + 14);
+
+            let ultBarY = 58;
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+            ctx.fillRect(0, ultBarY, canvas.width, barH - 2);
+            
+            let ultWidth = (energy / maxEnergy) * canvas.width;
+            let isUltReady = (energy >= maxEnergy);
+            if (isUltReady && frames % 20 < 10 && !isGameOver) {
+                ctx.fillStyle = '#ffffff'; 
+            } else {
+                ctx.fillStyle = '#cc33ff'; 
+            }
+            ctx.fillRect(0, ultBarY, ultWidth, barH - 2);
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 13px Arial';
+            if (isUltReady && !isGameOver) {
+                ctx.fillText(`ENERGY: MAX!  [ PRESS ENTER ]`, 10, ultBarY + 12);
+            } else {
+                ctx.fillText(`ENERGY: ${energy}%`, 10, ultBarY + 12);
+            }
+
+            if (ultimateFlash > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${ultimateFlash / 30})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        for(let i=0; i<4; i++) spawnEnemy();
+        gameLoop();
+    </script>
+</body>
+</html>
