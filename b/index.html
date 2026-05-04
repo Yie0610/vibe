@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自動檔案清單</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        h1 {
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            background: white;
+            margin: 8px 0;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        li:hover {
+            transform: translateX(5px);
+            border-left: 4px solid #0366d6;
+        }
+        a {
+            text-decoration: none;
+            color: #0366d6;
+            font-size: 18px;
+            display: block;
+            font-weight: 500;
+        }
+        .file-icon {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📁 檔案清單</h1>
+    <ul id="file-list">正在讀取檔案中...</ul>
+
+    <script>
+        // === 🛠️ 請根據您的需求修改以下三個變數 ===
+        const owner = 'yie0610';       // 您的 GitHub 帳號
+        const repo = 'vibecoding';     // 您的專案名稱
+        const path = 'b';              // 您要讀取的資料夾路徑 (例如 'b'。如果是要讀取最外層根目錄，請改成 '')
+
+        // 呼叫 GitHub API 的網址
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+        // 執行抓取動作
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) throw new Error('找不到資料夾或 API 限制');
+                return response.json();
+            })
+            .then(data => {
+                const listElement = document.getElementById('file-list');
+                listElement.innerHTML = ''; // 清空「正在讀取...」的文字
+
+                // 排除這個 index.html 檔案自己，以免出現在清單中
+                const filteredData = data.filter(item => item.name !== 'index.html');
+
+                if (filteredData.length === 0) {
+                    listElement.innerHTML = '<li>此資料夾目前沒有其他檔案。</li>';
+                    return;
+                }
+
+                // 迴圈處理每一個檔案，並建立清單與連結
+                filteredData.forEach(item => {
+                    const li = document.createElement('li');
+                    const a = document.createElement('a');
+
+                    // 判斷是資料夾還是檔案，給予不同的圖示
+                    const icon = item.type === 'dir' ? '🗂️' : '📄';
+                    
+                    a.href = item.name; // 因為這個網頁就放在同一個資料夾，所以直接用檔名當相對路徑即可
+                    a.innerHTML = `<span class="file-icon">${icon}</span> ${item.name}`;
+                    
+                    li.appendChild(a);
+                    listElement.appendChild(li);
+                });
+            })
+            .catch(error => {
+                console.error('發生錯誤:', error);
+                document.getElementById('file-list').innerHTML = `<li style="color:red;">讀取失敗。可能原因：路徑設定錯誤，或 GitHub API 呼叫次數達上限。</li>`;
+            });
+    </script>
+
+</body>
+</html>
