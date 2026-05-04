@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>時空電力師：極限進化</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #020617;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            background-color: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.3);
+            text-align: center;
+            width: 400px;
+            border: 1px solid #334155;
+        }
+        .level-badge {
+            background-color: #38bdf8;
+            color: #0f172a;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+        #timer { font-size: 2rem; color: #f43f5e; font-weight: bold; margin: 15px 0; }
+        #question { font-size: 3rem; margin: 25px 0; height: 80px; display: flex; justify-content: center; align-items: center; letter-spacing: 2px; }
+        input {
+            font-size: 2rem;
+            padding: 10px;
+            width: 100%;
+            border-radius: 10px;
+            border: 2px solid #334155;
+            background: #0f172a;
+            color: white;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: #38bdf8; }
+        #stats { display: flex; justify-content: space-between; margin-bottom: 10px; color: #94a3b8; }
+        .hidden { display: none; }
+        button {
+            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { transform: scale(1.05); filter: brightness(1.1); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="start-screen">
+        <h1>時空電力師 2.0</h1>
+        <p>每 10 題難度將大幅跨越</p>
+        <p style="color: #94a3b8;">你能撐過 2 分鐘的極限運算嗎？</p>
+        <button onclick="startGame()">開始同步時空</button>
+    </div>
+
+    <div id="play-screen" class="hidden">
+        <div id="stats">
+            <span>等級: <span id="lvl-display">1</span></span>
+            <span>得分: <span id="score">0</span></span>
+        </div>
+        <div class="level-badge" id="level-name">蒸汽時代</div>
+        <div id="timer">02:00</div>
+        <div id="question">---</div>
+        <input type="number" id="answer-input" placeholder="?" autocomplete="off">
+    </div>
+
+    <div id="result-screen" class="hidden">
+        <h1>同步結束</h1>
+        <p id="final-msg"></p>
+        <p>最終等級: <span id="final-lvl">1</span></p>
+        <h2 style="font-size: 3.5rem; margin: 10px 0;">得分: <span id="final-score">0</span></h2>
+        <button onclick="location.reload()">重新啟動</button>
+    </div>
+</div>
+
+<script>
+    let score = 0;
+    let timeLeft = 120;
+    let currentAns = 0;
+    let timerInterval;
+
+    const playScreen = document.getElementById('play-screen');
+    const startScreen = document.getElementById('start-screen');
+    const resultScreen = document.getElementById('result-screen');
+    const answerInput = document.getElementById('answer-input');
+
+    function startGame() {
+        startScreen.classList.add('hidden');
+        playScreen.classList.remove('hidden');
+        nextQuestion();
+        startTimer();
+        answerInput.focus();
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            let mins = Math.floor(timeLeft / 60);
+            let secs = timeLeft % 60;
+            document.getElementById('timer').innerText = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            
+            if (timeLeft <= 0) endGame("時間到！能源核心已穩定。");
+        }, 1000);
+    }
+
+    function nextQuestion() {
+        answerInput.value = '';
+        let n1, n2, op;
+        let level = Math.floor(score / 10) + 1;
+        document.getElementById('lvl-display').innerText = level;
+
+        if (level === 1) { // 0-10題：簡單加減
+            document.getElementById('level-name').innerText = "蒸汽時代 (加減)";
+            n1 = rand(5, 50); n2 = rand(5, 50);
+            op = Math.random() > 0.5 ? '+' : '-';
+        } else if (level === 2) { // 11-20題：進階加減
+            document.getElementById('level-name').innerText = "電氣時代 (二位數)";
+            n1 = rand(20, 99); n2 = rand(20, 99);
+            op = Math.random() > 0.5 ? '+' : '-';
+        } else if (level === 3) { // 21-30題：基礎乘法
+            document.getElementById('level-name').innerText = "資訊時代 (乘法)";
+            n1 = rand(2, 12); n2 = rand(2, 20);
+            op = '×';
+        } else if (level === 4) { // 31-40題：三位數挑戰
+            document.getElementById('level-name').innerText = "量子時代 (三位數)";
+            n1 = rand(100, 500); n2 = rand(100, 500);
+            op = Math.random() > 0.5 ? '+' : '-';
+        } else { // 41題以後：終極噩夢
+            document.getElementById('level-name').innerText = "神級文明 (混合)";
+            n1 = rand(11, 30); n2 = rand(3, 9);
+            op = '×';
+        }
+
+        if (op === '+') currentAns = n1 + n2;
+        else if (op === '-') {
+            if (n1 < n2) [n1, n2] = [n2, n1];
+            currentAns = n1 - n2;
+        } else {
+            currentAns = n1 * n2;
+        }
+
+        document.getElementById('question').innerText = `${n1} ${op} ${n2}`;
+    }
+
+    function rand(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    answerInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            if (parseInt(answerInput.value) === currentAns) {
+                score++;
+                document.getElementById('score').innerText = score;
+                nextQuestion();
+            } else {
+                // 答錯閃紅提示
+                answerInput.style.borderColor = '#f43f5e';
+                setTimeout(() => answerInput.style.borderColor = '#334155', 200);
+                answerInput.value = '';
+            }
+        }
+    });
+
+    function endGame(msg) {
+        clearInterval(timerInterval);
+        playScreen.classList.add('hidden');
+        resultScreen.classList.remove('hidden');
+        document.getElementById('final-msg').innerText = msg;
+        document.getElementById('final-score').innerText = score;
+        document.getElementById('final-lvl').innerText = Math.floor(score / 10) + 1;
+    }
+</script>
+
+</body>
+</html>
