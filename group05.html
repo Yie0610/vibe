@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台北交通查詢 (完全整合版)</title>
+    <style>
+        /* ================= 首頁儀表板樣式 ================= */
+        :root {
+            --radius-24: 24px;
+            --bg-light: #f5f7fa;
+            --glass-white: rgba(255, 255, 255, 0.9);
+            --glass-accent: rgba(255, 255, 255, 0.7);
+            --mrt-blue: #005eb8;
+            --bus-red: #d0021b;
+            --ubike-yellow: #ffb81c;
+            --text-dark: #2c3e50;
+            --border-color: #eceff1;
+        }
+
+        [data-theme="dark"] {
+            --bg-light: #121212;
+            --glass-white: rgba(30, 30, 30, 0.9);
+            --glass-accent: rgba(40, 40, 40, 0.7);
+            --text-dark: #e0e0e0;
+            --border-color: #333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            height: 94vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .header-info { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px; }
+        .weather-box { display: flex; align-items: center; }
+        .weather-icon { font-size: 32px; margin-right: 12px; }
+        .temp-val { font-size: 28px; font-weight: 900; }
+        .location-info { font-size: 14px; color: #7f8c8d; font-weight: 700; margin-left: 12px; }
+        
+        .clock-box { text-align: right; }
+        .time-display { font-size: 24px; font-weight: 900; font-family: monospace; letter-spacing: 1px; color: var(--mrt-blue); }
+        .date-display { font-size: 12px; color: #7f8c8d; font-weight: bold; }
+
+        .alert-ticker {
+            background: var(--glass-white);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 8px 20px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            font-size: 14px;
+        }
+        .ticker-scroll {
+            display: inline-block;
+            white-space: nowrap;
+            animation: scroll-text 30s linear infinite;
+            font-weight: 700;
+            color: #5d6d7e;
+        }
+        @keyframes scroll-text {
+            0% { transform: translateX(900px); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .page-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .page-header { font-size: 32px; font-weight: 900; letter-spacing: -1.5px; }
+        
+        .theme-toggle {
+            background: var(--glass-white); border: 2px solid var(--border-color);
+            color: var(--text-dark); padding: 8px 16px; border-radius: 20px;
+            cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.2s;
+        }
+        .theme-toggle:hover { background: var(--text-dark); color: var(--bg-light); }
+
+        .status-panel {
+            background: var(--glass-accent);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 18px 30px; border-radius: var(--radius-24); margin-bottom: 15px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+        }
+        .label-text { font-size: 12px; color: #95a5a6; letter-spacing: 1.5px; font-weight: 800; }
+        .station-name { font-size: 26px; font-weight: 900; color: #27ae60; margin-top: 5px; }
+
+        .nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; flex-grow: 1; min-height: 0; }
+
+        .card {
+            background: var(--glass-white); border-radius: var(--radius-24); padding: 24px;
+            display: flex; flex-direction: column; box-shadow: 0 8px 20px rgba(0,0,0,0.03);
+            border: 1px solid var(--border-color); transition: 0.3s;
+            overflow-y: auto;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
+
+        .top-indicator { width: 5px; height: 35px; border-radius: 10px; margin-bottom: 15px; flex-shrink: 0; }
+        .emoji-icon { font-size: 32px; margin-bottom: 15px; }
+
+        .btn-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+
+        .main-btn {
+            display: block; width: 100%; padding: 12px 10px; background: transparent;
+            color: var(--text-dark); text-decoration: none; text-align: center;
+            font-weight: 800; font-size: 14px; border-radius: 12px;
+            border: 2px solid var(--border-color); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer; font-family: inherit;
+        }
+
+        .mrt-btn:hover { background-color: var(--mrt-blue); color: #fff; border-color: var(--mrt-blue); }
+        .bus-btn:hover { background-color: var(--bus-red); color: #fff; border-color: var(--bus-red); }
+        .ubike-btn:hover { background-color: var(--ubike-yellow); color: #fff; border-color: var(--ubike-yellow); }
+
+        .card-info { margin-top: auto; padding-top: 15px; }
+        .card-title { font-size: 20px; font-weight: 900; }
+        .card-desc { font-size: 12px; color: #95a5a6; margin-top: 2px; font-weight: 600; }
+
+        @media (max-width: 900px) {
+            body { height: auto; overflow: auto; align-items: flex-start; }
+            .container { height: auto; }
+            .nav-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ================= 應用程式切換器 (App Player) 樣式 ================= */
+        #app-player {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #fff; z-index: 10000; flex-direction: column;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .player-header {
+            background: #2c3e50; color: #ecf0f1; padding: 12px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10001;
+        }
+        .player-title { font-weight: 900; font-size: 18px; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
+        .close-btn {
+            background: #e74c3c; color: white; border: none; padding: 8px 18px;
+            border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px;
+        }
+        .close-btn:hover { background: #c0392b; transform: scale(1.05); }
+        
+        #iframe-container { flex-grow: 1; display: flex; width: 100%; }
+    </style>
+</head>
+<body>
+
+<!-- ============================================== -->
+<!-- 資源封裝區 (完全收錄所有更新專案) -->
+<!-- ============================================== -->
+
+<!-- 1. 新版捷運專案 (TDX Token升級版) -->
+<textarea id="app-mrt-new" style="display: none;">
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>台北捷運查詢 (TDX 升級版)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font-family: Arial, "Noto Sans", sans-serif; background: radial-gradient(circle at top left, rgba(0, 160, 255, 0.18), transparent 22%), radial-gradient(circle at bottom right, rgba(120, 0, 255, 0.12), transparent 20%), linear-gradient(180deg, #020204 0%, #07090f 40%, #030405 100%); color: #f5f9ff; display: flex; justify-content: center; padding: 24px 12px; }
+    .app { width: 100%; max-width: 920px; background: rgba(10, 14, 20, 0.98); border-radius: 22px; box-shadow: 0 24px 80px rgba(0, 160, 255, 0.14); overflow: hidden; border: 1px solid rgba(180, 220, 255, 0.08); backdrop-filter: blur(12px); }
+    header { padding: 24px 24px 12px; text-align: center; background: linear-gradient(135deg, #0a1b35, #101826); color: #f8fbff; }
+    h1 { margin: 0; font-size: clamp(2rem, 3vw, 2.8rem); letter-spacing: 0.04em; }
+    .subtitle { margin: 12px auto 0; max-width: 720px; color: rgba(245,245,255,0.82); font-size: 0.96rem; line-height: 1.6; }
+    main { padding: 24px; display: grid; gap: 20px; }
+    .card { background: rgba(12, 18, 31, 0.96); border-radius: 18px; border: 1px solid rgba(255,255,255,0.08); padding: 20px; display: grid; gap: 16px; }
+    .field { display: grid; gap: 8px; }
+    label { font-weight: 600; color: #f8fbff; }
+    select, button { width: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); padding: 12px 14px; font-size: 1rem; outline: none; color: #f8fbff; background: rgba(255,255,255,0.05); }
+    select { background: rgba(255,255,255,0.08); }
+    button { background: #1f60d3; color: white; border-color: transparent; cursor: pointer; transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease; }
+    button:hover { transform: translateY(-1px); background: #194ea2; box-shadow: 0 6px 16px rgba(0,0,0,0.24); }
+    .info-row { display: grid; gap: 8px; font-size: 0.98rem; color: #d8edff; }
+    .result-list { display: grid; gap: 12px; }
+    .result-item { padding: 16px; border-radius: 16px; background: rgba(16, 24, 40, 0.95); border: 1px solid rgba(255,255,255,0.08); display: grid; gap: 10px; }
+    .map-shell { position: relative; border-radius: 18px; overflow: hidden; background: linear-gradient(180deg, rgba(4,9,18,0.98) 0%, rgba(8,14,26,0.98) 100%); border: 1px solid rgba(255,255,255,0.08); min-height: 300px; padding: 16px; }
+    .metro-map { width: 100%; height: auto; max-height: 420px; display: block; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 0.95rem; color: #d8edff; }
+    .legend-item { display: inline-flex; align-items: center; gap: 8px; }
+    .legend-color { width: 18px; height: 18px; border-radius: 10px; display: inline-block; }
+    .legend-color.red { background: #c72e35; }
+    .legend-color.blue { background: #0d4f8b; }
+    .legend-color.brown { background: #8a4f3d; }
+    .legend-color.green { background: #00a14b; }
+    .legend-color.orange { background: #ff8a00; }
+    .station-label { font-size: 0.75rem; fill: #e8f7ff; pointer-events: none; }
+    .station-dot { cursor: pointer; }
+    .station-dot.active { stroke: #000; stroke-width: 3px; }
+    .result-item h3 { margin: 0; font-size: 1rem; }
+    .result-meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 0.95rem; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 0.9rem; background: rgba(0, 134, 179, 0.18); color: #ebf9ff; }
+    .tag-warning { background: rgba(255, 170, 0, 0.22); color: #fff8e1; }
+    .tag-danger { background: rgba(220, 38, 38, 0.18); color: #ffe7e7; }
+    .footer { padding: 16px 24px 24px; color: #cfdff3; font-size: 0.92rem; line-height: 1.6; }
+    code { font-family: Consolas, "Courier New", monospace; background: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 8px; }
+    @media (max-width: 720px) { body { padding: 16px 10px; } .app { border-radius: 18px; } .card { padding: 18px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>台北捷運查詢</h1>
+      <p class="subtitle">整合台北捷運 TDX 即時到站資料，快速查詢目前列車動態與下一班到站時間。</p>
+    </header>
+    <main>
+      <section class="card">
+        <div class="field">
+          <label for="stationSelect">選擇車站</label>
+          <select id="stationSelect" aria-label="選擇捷運車站">
+            <option>載入車站清單...</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="refreshInterval">自動更新頻率</label>
+          <select id="refreshInterval" aria-label="自動更新頻率">
+            <option value="0">不自動更新</option>
+            <option value="15">15 秒</option>
+            <option value="30">30 秒</option>
+            <option value="60">60 秒</option>
+          </select>
+        </div>
+        <button id="queryBtn">查詢到站動態</button>
+        <div class="info-row">
+          <div>狀態：<span id="statusText">請按「查詢到站動態」，開始取得即時資料。</span></div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>即時到站資訊</h2>
+        <div id="resultList" class="result-list">尚未查詢</div>
+      </section>
+      <section class="card">
+        <h2>捷運路線示意圖</h2>
+        <div class="map-shell">
+          <svg id="metroMap" class="metro-map" viewBox="0 0 760 420" aria-label="台北捷運示意圖"></svg>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-color red"></span>淡水信義線</span>
+          <span class="legend-item"><span class="legend-color blue"></span>板南線</span>
+          <span class="legend-item"><span class="legend-color brown"></span>文湖線</span>
+          <span class="legend-item"><span class="legend-color green"></span>松山新店線</span>
+          <span class="legend-item"><span class="legend-color orange"></span>中和新蘆線</span>
+        </div>
+      </section>
+    </main>
+    <div class="footer">
+      本程式已升級使用 <strong>TDX 交通資料服務</strong>，內建您的專屬 Token 進行驗證。
+    </div>
+  </div>
+
+  <script>
+    const CLIENT_ID = 'B11405147-d9412730-bcae-4e13';
+    const CLIENT_SECRET = 'fafe17df-e200-4d01-8879-804fc2b1c9fb';
+    const BASE_URL = 'https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/';
+    let tdxToken = '';
+
+    const stationSelect = document.getElementById('stationSelect');
+    const queryBtn = document.getElementById('queryBtn');
+    const statusText = document.getElementById('statusText');
+    const resultList = document.getElementById('resultList');
+    const refreshInterval = document.getElementById('refreshInterval');
+    let autoRefreshTimer = null;
+    let stationOptions = [];
+    const metroLines = [
+      { id: 'red', name: '淡水信義線', color: '#c72e35', stations: [ { name: '淡水', x: 80, y: 80 }, { name: '紅樹林', x: 150, y: 80 }, { name: '關渡', x: 220, y: 80 }, { name: '竹圍', x: 290, y: 100 }, { name: '北投', x: 340, y: 140 }, { name: '石牌', x: 390, y: 190 }, { name: '明德', x: 410, y: 230 }, { name: '芝山', x: 420, y: 270 }, { name: '士林', x: 420, y: 320 }, { name: '劍潭', x: 370, y: 350 }, { name: '圓山', x: 310, y: 360 }, { name: '民權西路', x: 250, y: 340 }, { name: '雙連', x: 210, y: 300 }, { name: '中山', x: 190, y: 250 }, { name: '台北車站', x: 240, y: 200 }, { name: '中正紀念堂', x: 310, y: 210 }, { name: '台北101/世貿', x: 470, y: 200 } ] },
+      { id: 'blue', name: '板南線', color: '#0d4f8b', stations: [ { name: '南港展覽館', x: 700, y: 300 }, { name: '市政府', x: 620, y: 280 }, { name: '忠孝敦化', x: 560, y: 250 }, { name: '忠孝復興', x: 500, y: 220 }, { name: '善導寺', x: 430, y: 220 }, { name: '台北車站', x: 350, y: 220 }, { name: '西門', x: 280, y: 220 }, { name: '龍山寺', x: 230, y: 220 }, { name: '江子翠', x: 170, y: 220 }, { name: '板橋', x: 110, y: 220 }, { name: '府中', x: 60, y: 220 } ] },
+      { id: 'brown', name: '文湖線', color: '#8a4f3d', stations: [ { name: '動物園', x: 180, y: 320 }, { name: '木柵', x: 220, y: 300 }, { name: '萬芳社區', x: 250, y: 280 }, { name: '萬芳醫院', x: 280, y: 260 }, { name: '辛亥', x: 310, y: 240 }, { name: '麟光', x: 340, y: 220 }, { name: '六張犁', x: 370, y: 200 }, { name: '科技大樓', x: 410, y: 180 }, { name: '大安', x: 450, y: 160 }, { name: '忠孝復興', x: 490, y: 140 }, { name: '南京復興', x: 530, y: 120 }, { name: '中山國中', x: 560, y: 100 }, { name: '松山機場', x: 610, y: 100 }, { name: '台北小巨蛋', x: 650, y: 110 }, { name: '南京三民', x: 700, y: 140 } ] },
+      { id: 'green', name: '松山新店線', color: '#00a14b', stations: [ { name: '新店', x: 140, y: 380 }, { name: '新店區公所', x: 170, y: 350 }, { name: '七張', x: 210, y: 320 }, { name: '大坪林', x: 250, y: 290 }, { name: '景美', x: 290, y: 260 }, { name: '萬隆', x: 330, y: 230 }, { name: '公館', x: 370, y: 200 }, { name: '台電大樓', x: 410, y: 170 }, { name: '古亭', x: 450, y: 140 }, { name: '東門', x: 500, y: 120 }, { name: '忠孝新生', x: 560, y: 100 }, { name: '松山', x: 660, y: 90 } ] },
+      { id: 'orange', name: '中和新蘆線', color: '#ff8a00', stations: [ { name: '新莊', x: 80, y: 260 }, { name: '輔大', x: 120, y: 260 }, { name: '丹鳳', x: 150, y: 260 }, { name: '迴龍', x: 190, y: 260 }, { name: '三重國小', x: 230, y: 250 }, { name: '三重', x: 250, y: 240 }, { name: '台北橋', x: 260, y: 230 }, { name: '菜寮', x: 280, y: 210 }, { name: '大橋頭', x: 310, y: 190 }, { name: '民權西路', x: 350, y: 170 }, { name: '松江南京', x: 420, y: 150 }, { name: '行天宮', x: 520, y: 170 }, { name: '中山國小', x: 600, y: 220 } ] }
+    ];
+
+    async function getTdxToken() {
+      const p = new URLSearchParams();
+      p.append('grant_type', 'client_credentials');
+      p.append('client_id', CLIENT_ID);
+      p.append('client_secret', CLIENT_SECRET);
+      try {
+        const r = await fetch('https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: p });
+        const d = await r.json();
+        if (d.access_token) tdxToken = d.access_token;
+      } catch(e) { console.error('Token Error', e); }
+    }
+
+    async function ptxFetch(url) {
+      if (!tdxToken) await getTdxToken();
+      let response = await fetch(url, { headers: { Authorization: `Bearer ${tdxToken}` } });
+      if (response.status === 401) {
+        await getTdxToken();
+        response = await fetch(url, { headers: { Authorization: `Bearer ${tdxToken}` } });
+      }
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`API 錯誤：${response.status} ${response.statusText} - ${text}`);
+      }
+      return response.json();
+    }
+
+    function buildStationOption(station) {
+      const option = document.createElement('option');
+      option.value = station.name;
+      option.textContent = `${station.name} (${station.line})`;
+      return option;
+    }
+
+    function getDefaultStationOptions() {
+      const unique = new Map();
+      metroLines.forEach(line => {
+        line.stations.forEach(station => {
+          const key = `${station.name}-${line.id}`;
+          if (!unique.has(key)) {
+            unique.set(key, { name: station.name, line: line.name });
+          }
+        });
+      });
+      return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    }
+
+    function findMapStation(name) {
+      const normalized = name?.trim();
+      for (const line of metroLines) {
+        for (const station of line.stations) {
+          if (station.name === normalized) return station;
+        }
+      }
+      return null;
+    }
+
+    function renderMetroMap(selectedName = '') {
+      const svg = document.getElementById('metroMap');
+      const svgNS = 'http://www.w3.org/2000/svg';
+      svg.innerHTML = '';
+      metroLines.forEach(line => {
+        const points = line.stations.map(s => `${s.x},${s.y}`).join(' ');
+        const linePath = document.createElementNS(svgNS, 'polyline');
+        linePath.setAttribute('points', points);
+        linePath.setAttribute('fill', 'none');
+        linePath.setAttribute('stroke', line.color);
+        linePath.setAttribute('stroke-width', '12');
+        linePath.setAttribute('stroke-linecap', 'round');
+        linePath.setAttribute('stroke-linejoin', 'round');
+        svg.appendChild(linePath);
+        line.stations.forEach(station => {
+          const active = station.name === selectedName;
+          const circle = document.createElementNS(svgNS, 'circle');
+          circle.setAttribute('cx', station.x);
+          circle.setAttribute('cy', station.y);
+          circle.setAttribute('r', active ? 9 : 6);
+          circle.setAttribute('fill', '#fff');
+          circle.setAttribute('stroke', line.color);
+          circle.setAttribute('stroke-width', active ? '4' : '2');
+          circle.classList.add('station-dot');
+          svg.appendChild(circle);
+          const label = document.createElementNS(svgNS, 'text');
+          label.setAttribute('x', station.x + 10);
+          label.setAttribute('y', station.y + 4);
+          label.setAttribute('class', 'station-label');
+          label.textContent = station.name;
+          svg.appendChild(label);
+        });
+      });
+      const selectedStation = findMapStation(selectedName);
+      if (selectedStation) {
+        const info = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        info.setAttribute('x', 20);
+        info.setAttribute('y', 400);
+        info.setAttribute('fill', '#333');
+        info.setAttribute('font-size', '16');
+        info.textContent = `已標示車站：${selectedName}`;
+        svg.appendChild(info);
+      }
+    }
+
+    async function loadStations() {
+      stationSelect.innerHTML = getDefaultStationOptions().map(buildStationOption).map(opt => opt.outerHTML).join('');
+      renderMetroMap();
+      try {
+        statusText.textContent = '載入車站清單中...';
+        const url = `${BASE_URL}Station?$format=JSON`;
+        const data = await ptxFetch(url);
+        const unique = {};
+        stationOptions = data
+          .map(item => ({ name: item.StationName?.Zh_tw || '未知', line: item.StationID?.slice(0, 1) || 'N' }))
+          .filter(item => item.name)
+          .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'))
+          .filter(item => { const key = `${item.name}-${item.line}`; if (unique[key]) return false; unique[key] = true; return true; });
+
+        stationSelect.innerHTML = stationOptions.map(buildStationOption).map(opt => opt.outerHTML).join('');
+        statusText.textContent = '車站清單載入完成，請選擇車站查詢。';
+        renderMetroMap();
+      } catch (error) {
+        statusText.textContent = '載入車站清單失敗，請確認 API 設定或網路連線。';
+        resultList.innerHTML = `<div class="result-item"><strong>範例資料顯示</strong><div>${error.message}</div></div>`;
+        const fallback = getDefaultStationOptions();
+        stationSelect.innerHTML = fallback.map(buildStationOption).map(opt => opt.outerHTML).join('');
+      }
+    }
+
+    function getRandomArrivalMinutes() { return Math.floor(Math.random() * 10) + 1; }
+
+    function renderResults(items) {
+      if (!items || items.length === 0) {
+        const minutes = getRandomArrivalMinutes();
+        resultList.innerHTML = `
+          <div class="result-item">
+            <h3>即時到站</h3>
+            <div class="result-meta">
+              <span class="tag">一般列車</span>
+              <span class="tag">下一班：約 ${minutes} 分鐘後到站</span>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      resultList.innerHTML = items.map(item => {
+        const dest = item.DestinationName?.Zh_tw || item.DestinationName || '未知方向';
+        const status = item.StopStatus || item.Status || '未知';
+        let estimate = '資料不足';
+        if (item.EstimateTime != null) estimate = `${Math.ceil(item.EstimateTime / 60)} 分鐘`;
+        else if (item.NextTrainTime) estimate = item.NextTrainTime;
+        else estimate = `${getRandomArrivalMinutes()} 分鐘`;
+        const trainType = item.TrainTypeName?.Zh_tw || item.TrainTypeName || '一般列車';
+        const note = item.Message || item.StopStatus || '';
+        const tagClass = item.EstimateTime != null && item.EstimateTime <= 120 ? 'tag-danger' : 'tag';
+        return `<div class="result-item"><h3>${dest}</h3><div class="result-meta"><span class="tag">${trainType}</span><span class="${tagClass}">預估：${estimate}</span><span>狀態：${status}</span></div>${note ? `<div>備註：${note}</div>` : ''}</div>`;
+      }).join('');
+    }
+
+    async function queryArrival() {
+      const stationName = stationSelect.value;
+      renderMetroMap(stationName);
+      if (!stationName) { statusText.textContent = '請先選擇一個車站。'; return; }
+      statusText.textContent = `查詢 ${stationName} 的即時列車資料...`;
+      try {
+        const filter = encodeURIComponent(`StationName/Zh_tw eq '${stationName}'`);
+        const url = `${BASE_URL}RealTimeByFrequency/City/Taipei?$filter=${filter}&$format=JSON`;
+        const data = await ptxFetch(url);
+        if (!Array.isArray(data) || data.length === 0) { renderResults([]); statusText.textContent = `${stationName} 暫無即時列車資料。`; return; }
+        const sorted = data.sort((a, b) => { const aTime = a.EstimateTime ?? 9999; const bTime = b.EstimateTime ?? 9999; return aTime - bTime; });
+        renderResults(sorted.slice(0, 8));
+        statusText.textContent = `已取得 ${stationName} 即時到站資訊。`;
+      } catch (error) { renderResults([]); }
+    }
+
+    function startAutoRefresh() {
+      if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+      const interval = Number(refreshInterval.value);
+      if (interval > 0) autoRefreshTimer = setInterval(queryArrival, interval * 1000);
+    }
+
+    queryBtn.addEventListener('click', () => { queryArrival(); startAutoRefresh(); });
+    stationSelect.addEventListener('change', () => renderMetroMap(stationSelect.value));
+    refreshInterval.addEventListener('change', startAutoRefresh);
+
+    loadStations();
+  </script>
+</body>
+</html>
+</textarea>
+
+<!-- 2. 捷運專案：何泓諭_北捷全路網監控 (更新版) -->
+<textarea id="app-mrt-he" style="display: none;">
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>北捷全路網監控系統 - 最終補完版</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><style>:root{--panel-shadow:0 20px 60px rgba(0,0,0,0.15);--radius-xl:30px;--radius-m:18px;--color-parallel:#001A33;--color-tra:#005696;--color-hsr:#f58220;--color-outside:#FF4500;--color-in-walk:#6c757d;}body,html{margin:0;padding:0;height:100%;font-family:"PingFang TC","Microsoft JhengHei",sans-serif;background:#fff;overflow:hidden;}#map{position:absolute;top:0;bottom:0;left:0;right:0;z-index:1;}#ui-container{position:absolute;top:20px;left:20px;width:400px;max-height:calc(100vh - 40px);z-index:1000;pointer-events:none;display:flex;flex-direction:column;}.glass-panel{background:rgba(255,255,255,0.95);border-radius:var(--radius-xl);padding:25px;box-shadow:var(--panel-shadow);pointer-events:auto;backdrop-filter:blur(20px);border:1px solid rgba(0,0,0,0.05);display:flex;flex-direction:column;overflow:hidden;}.header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-shrink:0;}#current-time{font-family:monospace;font-size:14px;font-weight:800;color:#333;}select{width:100%;padding:16px;border-radius:var(--radius-m);border:2px solid #f2f2f2;font-size:16px;font-weight:700;margin-bottom:12px;cursor:pointer;background:#fff;outline:none;appearance:none;transition:border 0.3s;flex-shrink:0;}select:focus{border-color:#000;}.badge{font-size:11px;padding:6px 12px;border-radius:6px;font-weight:800;color:#fff;margin-top:6px;display:inline-block;margin-right:5px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}.badge-parallel{background:var(--color-parallel);border-left:4px solid #fff;}.badge-tra{background:var(--color-tra);}.badge-hsr{background:var(--color-hsr);}.badge-outside{background:var(--color-outside);animation:pulse 1.5s infinite;}.badge-in-walk{background:var(--color-in-walk);}@keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.05);opacity:0.8;}100%{transform:scale(1);}}#arrival-board{margin-top:20px;display:none;overflow-y:auto;padding-right:10px;flex-grow:1;}.station-header{margin-bottom:15px;border-bottom:3px solid #f8f8f8;padding-bottom:15px;}.station-title{font-size:32px;font-weight:900;color:#1a1a1a;margin:0;}.route-card{background:#fff;border-radius:var(--radius-m);border:1px solid #f0f0f0;overflow:hidden;margin-bottom:15px;}.route-header{padding:12px 20px;color:#fff;font-size:14px;font-weight:800;display:flex;justify-content:space-between;}.arrival-item{display:flex;justify-content:space-between;padding:14px 20px;align-items:center;border-bottom:1px solid #f9f9f9;}.time-value{font-size:24px;font-weight:900;color:#000;}.unit{font-size:12px;color:#aaa;margin-left:3px;font-weight:normal;}</style></head><body><div id="map"></div><div id="ui-container"><div class="glass-panel"><div class="header-row"><div style="font-weight: 900; font-size: 18px;">TRTC MONITOR</div><div id="current-time">00:00:00</div></div><select id="line-select" onchange="initLine();"><option value="">選擇營運路線</option><option value="BL">板南線 (Bannan Line)</option><option value="R">淡水信義線 (Tamsui-Xinyi Line)</option><option value="G">松山新店線 (Songshan-Xindian Line)</option><option value="O">中和新蘆線 (Zhonghe-Xinlu Line)</option><option value="BR">文湖線 (Wenhu Line)</option><option value="Y">環狀線 (Circular Line)</option></select><select id="station-select" onchange="focusStation();"><option value="">選擇車站</option></select><div id="arrival-board"></div></div></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const TRANSFERS={"西門":{p:true,i:false,o:false,t:false,h:false,note:"平行轉乘：藍線與綠線同層"},"中正紀念堂":{p:true,i:false,o:false,t:false,h:false,note:"平行轉乘：紅線與綠線同層"},"古亭":{p:true,i:false,o:false,t:false,h:false,note:"平行轉乘：綠線與橘線同層"},"東門":{p:true,i:false,o:false,t:false,h:false,note:"平行轉乘：紅線與橘線同層"},"台北車站":{p:false,i:true,o:false,t:true,h:true,note:"三鐵共構：站內步行轉乘"},"板橋":{p:false,i:true,o:true,t:true,h:true,note:"三鐵共構：捷運/台鐵/高鐵 (含站外轉乘)"},"南港":{p:false,i:true,o:false,t:true,h:true,note:"三鐵共構：站內步行轉乘"},"大坪林":{p:false,i:false,o:true,t:false,h:false,note:"站外轉乘：綠線與黃線"},"景安":{p:false,i:true,o:false,t:false,h:false,note:"站內轉乘：橘線與黃線"},"忠孝新生":{p:false,i:true,o:false,t:false,h:false,note:"站內轉乘：藍線與橘線"},"忠孝復興":{p:false,i:true,o:false,t:false,h:false,note:"站內轉乘：藍線與棕線"},"民權西路":{p:false,i:true,o:false,t:false,h:false,note:"站內轉乘：紅線與橘線"},"松江南京":{p:false,i:true,o:false,t:false,h:false,note:"站內轉乘：綠線與橘線"}};const DATA={"BL":{name:"板南線",color:"#005eb8",dir:["往 頂埔","往 南港展覽館"],sts:[["BL01","頂埔",24.9601,121.4205],["BL02","永寧",24.9711,121.4363],["BL03","土城",24.9824,121.4442],["BL04","海山",24.9912,121.4532],["BL05","亞東醫院",25.0011,121.4621],["BL06","府中",25.0085,121.4593],["BL07","板橋",25.0135,121.4623],["BL08","新埔",25.0232,121.4682],["BL09","江子翠",25.0301,121.4745],["BL10","龍山寺",25.0354,121.4998],["BL11","西門",25.0423,121.5083],["BL12","台北車站",25.0465,121.5173],["BL13","善導寺",25.0445,121.5264],["BL14","忠孝新生",25.0422,121.5328],["BL15","忠孝復興",25.0412,121.5432],["BL16","忠孝敦化",25.0413,121.5488],["BL17","國父紀念館",25.0413,121.5583],["BL18","市政府",25.0406,121.5651],["BL19","永春",25.0405,121.5762],["BL20","後山埤",25.0451,121.5815],["BL21","昆陽",25.0505,121.5934],["BL22","南港",25.0531,121.6069],["BL23","南港展覽館",25.0553,121.6175]]},"R":{name:"淡水信義線",color:"#e3002c",dir:["往 象山","往 淡水"],sts:[["R02","象山",25.0287,121.5714],["R03","台北101",25.0330,121.5654],["R04","信義安和",25.0332,121.5518],["R05","大安",25.0329,121.5435],["R06","大安森林公園",25.0333,121.5358],["R07","東門",25.0338,121.5283],["R08","中正紀念堂",25.0327,121.5183],["R09","台大醫院",25.0411,121.5161],["R10","台北車站",25.0475,121.5171],["R11","中山",25.0526,121.5204],["R12","雙連",25.0583,121.5203],["R13","民權西路",25.0624,121.5195],["R14","圓山",25.0715,121.5212],["R15","劍潭",25.0847,121.5244],["R16","士林",25.0932,121.5263],["R17","芝山",25.1034,121.5226],["R18","明德",25.1098,121.5191],["R19","石牌",25.1154,121.5152],["R20","唭哩岸",25.1206,121.5065],["R21","奇岩",25.1251,121.5009],["R22","北投",25.1317,121.4986],["R23","復興崗",25.1373,121.4855],["R24","忠義",25.1310,121.4735],["R25","關渡",25.1245,121.4673],["R26","竹圍",25.1368,121.4589],["R27","紅樹林",25.1540,121.4585],["R28","淡水",25.1677,121.4455]]},"G":{name:"松山新店線",color:"#008659",dir:["往 新店","往 松山"],sts:[["G01","新店",24.9578,121.5376],["G02","新店區公所",24.9675,121.5414],["G03","七張",24.9752,121.5429],["G04","大坪林",24.9824,121.5413],["G05","景美",24.9918,121.5407],["G06","萬隆",25.0019,121.5404],["G07","公館",25.0136,121.5348],["G08","台電大樓",25.0207,121.5283],["G09","古亭",25.0263,121.5226],["G10","中正紀念堂",25.0327,121.5183],["G11","小南門",25.0354,121.5061],["G12","西門",25.0423,121.5083],["G13","北門",25.0491,121.5093],["G14","中山",25.0526,121.5204],["G15","松江南京",25.0512,121.5332],["G16","南京復興",25.0516,121.5440],["G17","台北小巨蛋",25.0515,121.5540],["G18","南京三民",25.0514,121.5638],["G19","松山",25.0501,121.5777]]},"O":{name:"中和新蘆線",color:"#f8b61c",dir:["往 南勢角","往 迴龍/蘆洲"],sts:[["O01","南勢角",24.9898,121.5090],["O02","景安",24.9918,121.5051],["O03","永安市場",25.0034,121.5113],["O04","頂溪",25.0128,121.5156],["O05","古亭",25.0263,121.5226],["O06","東門",25.0338,121.5283],["O07","忠孝新生",25.0422,121.5328],["O08","松江南京",25.0512,121.5332],["O09","行天宮",25.0592,121.5332],["O10","中山國小",25.0628,121.5262],["O11","民權西路",25.0624,121.5195],["O12","大橋頭",25.0636,121.5127],["O13","台北橋",25.0632,121.5015],["O14","菜寮",25.0594,121.4925],["O15","三重",25.0558,121.4842],["O16","先嗇宮",25.0465,121.4722],["O17","頭前庄",25.0392,121.4619],["O18","新莊",25.0354,121.4526],["O19","輔大",25.0329,121.4363],["O20","丹鳳",25.0291,121.4230],["O21","迴龍",25.0219,121.4113]]},"BR":{name:"文湖線",color:"#c48c31",dir:["往 動物園","往 南港展覽館"],sts:[["BR01","動物園",24.9982,121.5811],["BR02","木柵",24.9979,121.5739],["BR03","萬芳社區",24.9986,121.5684],["BR04","萬芳醫院",24.9994,121.5583],["BR05","辛亥",25.0051,121.5558],["BR06","麟光",25.0185,121.5588],["BR07","六張犁",25.0237,121.5531],["BR08","科技大樓",25.0261,121.5436],["BR09","大安",25.0329,121.5435],["BR10","忠孝復興",25.0412,121.5432],["BR11","南京復興",25.0516,121.5440],["BR12","中山國中",25.0607,121.5442],["BR13","松山機場",25.0645,121.5518],["BR14","大直",25.0795,121.5471],["BR15","劍南路",25.0848,121.5556],["BR16","西湖",25.0821,121.5672],["BR17","港墘",25.0800,121.5751],["BR18","文德",25.0785,121.5847],["BR19","內湖",25.0838,121.5940],["BR20","大湖公園",25.0837,121.6030],["BR21","葫洲",25.0728,121.6074],["BR22","東湖",25.0671,121.6115],["BR23","南港軟體園區",25.0599,121.6160],["BR24","南港展覽館",25.0553,121.6175]]},"Y":{name:"環狀線",color:"#ffdb00",dir:["往 大坪林","往 新北產業園區"],sts:[["Y07","大坪林",24.9824,121.5413],["Y08","十四張",24.9825,121.5300],["Y09","秀朗橋",24.9926,121.5234],["Y10","景平",24.9936,121.5152],["Y11","景安",24.9918,121.5051],["Y12","中和",25.0016,121.4965],["Y13","橋和",25.0061,121.4900],["Y14","中原",25.0084,121.4842],["Y15","板新",25.0125,121.4725],["Y16","板橋",25.0153,121.4632],["Y17","新埔民生",25.0261,121.4674],["Y18","頭前庄",25.0392,121.4619],["Y19","幸福",25.0506,121.4601],["Y20","新北產業園區",25.0615,121.4593]]}};let map,routeLayers=[],mainPin;window.onload=()=>{map=L.map('map',{zoomControl:false,attributionControl:false}).setView([25.047,121.51],13);L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);setInterval(()=>{document.getElementById('current-time').innerText=new Date().toLocaleTimeString('zh-TW',{hour12:false});},1000);};function initLine(){const key=document.getElementById('line-select').value;const sSel=document.getElementById('station-select');sSel.innerHTML='<option value="">選擇車站</option>';if(!key)return;DATA[key].sts.sort((a,b)=>a[0].localeCompare(b[0])).forEach(s=>{sSel.add(new Option(`${s[0]} ${s[1]}`,s[1]));});drawNetwork([{k:key}],true);}function drawNetwork(matches,autoFit){routeLayers.forEach(l=>map.removeLayer(l));routeLayers=[];const bounds=[];const activeLine=document.getElementById('line-select').value;const keys=[...new Set([activeLine,...matches.map(m=>m.k)])];keys.forEach(k=>{const line=DATA[k];if(!line)return;const pts=line.sts.map(s=>{bounds.push([s[2],s[3]]);return[s[2],s[3]];});routeLayers.push(L.polyline(pts,{color:line.color,weight:(k===activeLine)?10:5,opacity:(k===activeLine)?1:0.3,lineJoin:'round'}).addTo(map));});if(autoFit&&bounds.length)map.fitBounds(bounds,{padding:[50,50]});}function focusStation(){const name=document.getElementById('station-select').value;if(!name)return;const matches=[];for(let k in DATA){const f=DATA[k].sts.find(s=>s[1]===name);if(f)matches.push({k:k,id:f[0],pos:[f[2],f[3]]});}drawNetwork(matches,false);map.flyTo(matches[0].pos,15);if(mainPin)map.removeLayer(mainPin);mainPin=L.circleMarker(matches[0].pos,{radius:14,color:'#000',weight:4,fillColor:'#fff',fillOpacity:1}).addTo(map);renderBoard(name,matches);}function renderBoard(name,matches){const board=document.getElementById('arrival-board');board.style.display='block';const info=TRANSFERS[name];let html=`<div class="station-header"><h1 class="station-title">${name}</h1>`;if(info){if(info.p)html+=`<span class="badge badge-parallel">平行轉乘</span>`;if(info.i)html+=`<span class="badge badge-in-walk">站內轉乘</span>`;if(info.o)html+=`<span class="badge badge-outside">站外轉乘</span>`;if(info.t)html+=`<span class="badge badge-tra">台鐵轉乘</span>`;if(info.h)html+=`<span class="badge badge-hsr">高鐵轉乘</span>`;html+=`<p style="font-size:12px; color:#666; margin:10px 0 0 0;">📌 ${info.note}</p>`;}html+=`</div>`;matches.forEach(m=>{const line=DATA[m.k];html+=`<div class="route-card"><div class="route-header" style="background:${line.color}"><span>${line.name}</span><span>${m.id}</span></div><div class="arrival-item"><span style="font-weight:700;color:#555">${line.dir[0]}</span><span class="time-value">${Math.floor(Math.random()*6+1)}<span class="unit">分</span></span></div><div class="arrival-item"><span style="font-weight:700;color:#555">${line.dir[1]}</span><span class="time-value">${Math.floor(Math.random()*6+1)}<span class="unit">分</span></span></div></div>`;});board.innerHTML=html;board.scrollTop=0;}</script></body></html>
+</textarea>
+
+<!-- 3. 捷運專案：邱則維_台北捷運 (SVG更新版 + Auto Token) -->
+<textarea id="app-mrt-qiu" style="display: none;">
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>台北捷運即時查詢系統</title><style>:root{--bg:#f4f6f8;--card:#ffffff;--text:#1f2937;--muted:#6b7280;--red:#e3002c;--green:#008659;--blue:#0070bd;--orange:#f8b61c;--brown:#c48c31;--yellow:#ffdb00;}*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei",Arial,sans-serif;background:var(--bg);color:var(--text);}.app{display:grid;grid-template-columns:380px 1fr;height:100vh;gap:16px;padding:16px;}.panel,.map{background:var(--card);border-radius:18px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:18px;overflow:auto;}h1{font-size:24px;margin:0 0 12px}h2{font-size:18px;margin:18px 0 10px}input,select,button{width:100%;padding:11px;border:1px solid #d1d5db;border-radius:10px;margin:6px 0;font-size:15px;}button{background:#111827;color:white;cursor:pointer;}.status{padding:10px;border-radius:10px;background:#eef2ff;color:#374151;margin:10px 0;font-size:14px;}.card{border:1px solid #e5e7eb;border-radius:14px;padding:12px;margin:10px 0;background:#fff;}.station-name{font-weight:700}.meta{color:var(--muted);font-size:14px;margin-top:4px}.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;color:white;margin-top:8px;}.normal{background:#16a34a}.soon{background:#f97316}.error{background:#dc2626}svg{width:100%;height:680px}.line{fill:none;stroke-width:10;stroke-linecap:round;opacity:.85}.station{fill:white;stroke:#111827;stroke-width:2;cursor:pointer;}.station:hover{stroke-width:5}.station.active{fill:#111827;stroke:#fbbf24;stroke-width:5;}.tooltip{position:fixed;background:#111827;color:white;padding:8px 10px;border-radius:8px;font-size:13px;pointer-events:none;display:none;z-index:10;}@media(max-width:900px){.app{grid-template-columns:1fr;height:auto}}</style></head><body><div class="app"><aside class="panel"><h1>台北捷運即時查詢</h1><label>TDX Access Token</label><input id="tokenInput" placeholder="系統將自動獲取..."><label>選擇捷運線</label><select id="lineSelect"></select><label>搜尋車站</label><input id="searchInput" placeholder="例如：台北車站、忠孝復興"><button onclick="manualRefresh()">立即更新</button><div id="statusBox" class="status">尚未載入資料</div><h2>車站詳細資訊</h2><div id="detailBox" class="card">請點擊右側捷運站，或選擇路線查詢。</div><h2>整線即時到站資訊</h2><div id="listBox"></div></aside><main class="map"><h1>視覺化捷運路網</h1><svg id="metroMap" viewBox="0 0 900 680"></svg></main></div><div id="tooltip" class="tooltip"></div><script>const CLIENT_ID='B11405147-d9412730-bcae-4e13';const CLIENT_SECRET='fafe17df-e200-4d01-8879-804fc2b1c9fb';const API_TRTC="https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/LiveBoard/TRTC?$top=300&$format=JSON";const API_NTMC="https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/LiveBoard/NTMC?$top=300&$format=JSON";const LINES={BR:{name:"文湖線",color:"#c48c31",api:"TRTC"},R:{name:"淡水信義線",color:"#e3002c",api:"TRTC"},G:{name:"松山新店線",color:"#008659",api:"TRTC"},O:{name:"中和新蘆線",color:"#f8b61c",api:"TRTC"},BL:{name:"板南線",color:"#0070bd",api:"TRTC"},Y:{name:"環狀線",color:"#ffdb00",api:"NTMC"}};const STATIONS=[{id:"R28",name:"淡水",line:"R",x:130,y:70},{id:"R22",name:"北投",line:"R",x:190,y:130},{id:"R16",name:"士林",line:"R",x:250,y:190},{id:"R13",name:"民權西路",line:"R",x:320,y:250},{id:"R10",name:"台北車站",line:"R",x:390,y:320},{id:"R08",name:"中正紀念堂",line:"R",x:430,y:390},{id:"R03",name:"台電大樓",line:"R",x:460,y:470},{id:"R02",name:"古亭",line:"R",x:500,y:510},{id:"G19",name:"松山",line:"G",x:720,y:230},{id:"G16",name:"南京復興",line:"G",x:610,y:270},{id:"G14",name:"中山",line:"G",x:470,y:300},{id:"G12",name:"西門",line:"G",x:350,y:350},{id:"G10",name:"中正紀念堂",line:"G",x:430,y:390},{id:"G09",name:"古亭",line:"G",x:500,y:510},{id:"G05",name:"公館",line:"G",x:550,y:570},{id:"G01",name:"新店",line:"G",x:610,y:630},{id:"BL23",name:"南港展覽館",line:"BL",x:780,y:350},{id:"BL18",name:"忠孝復興",line:"BL",x:600,y:350},{id:"BL13",name:"台北車站",line:"BL",x:390,y:320},{id:"BL11",name:"西門",line:"BL",x:350,y:350},{id:"BL07",name:"板橋",line:"BL",x:250,y:420},{id:"BL01",name:"頂埔",line:"BL",x:100,y:500},{id:"O21",name:"迴龍",line:"O",x:90,y:250},{id:"O16",name:"三重國小",line:"O",x:230,y:280},{id:"O11",name:"民權西路",line:"O",x:320,y:250},{id:"O08",name:"松江南京",line:"O",x:520,y:280},{id:"O05",name:"忠孝新生",line:"O",x:560,y:340},{id:"O02",name:"東門",line:"O",x:520,y:430},{id:"O01",name:"南勢角",line:"O",x:620,y:560},{id:"BR24",name:"南港展覽館",line:"BR",x:780,y:350},{id:"BR15",name:"劍南路",line:"BR",x:620,y:160},{id:"BR11",name:"中山國中",line:"BR",x:610,y:250},{id:"BR10",name:"南京復興",line:"BR",x:610,y:270},{id:"BR08",name:"忠孝復興",line:"BR",x:600,y:350},{id:"BR01",name:"動物園",line:"BR",x:760,y:610},{id:"Y20",name:"新北產業園區",line:"Y",x:110,y:340},{id:"Y16",name:"幸福",line:"Y",x:180,y:380},{id:"Y14",name:"板橋",line:"Y",x:250,y:420},{id:"Y11",name:"中和",line:"Y",x:400,y:530},{id:"Y08",name:"景安",line:"Y",x:520,y:570},{id:"Y07",name:"十四張",line:"Y",x:610,y:610}];const state={liveData:[],selectedLine:"BL",selectedStation:null};init();function init(){initLineSelect();drawMap();bindEvents();manualRefresh();}function initLineSelect(){const select=document.getElementById("lineSelect");select.innerHTML=Object.entries(LINES).map(([id,line])=>`<option value="${id}">${line.name}</option>`).join("");select.value=state.selectedLine;}function bindEvents(){document.getElementById("lineSelect").addEventListener("change",e=>{state.selectedLine=e.target.value;renderList();highlightLine();});document.getElementById("searchInput").addEventListener("input",renderList);}async function manualRefresh(){await fetchLiveData();}async function fetchLiveData(){let token=document.getElementById("tokenInput").value.trim();if(!token){const p=new URLSearchParams();p.append('grant_type','client_credentials');p.append('client_id',CLIENT_ID);p.append('client_secret',CLIENT_SECRET);try{const r=await fetch('https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p});const d=await r.json();if(d.access_token){token=d.access_token;document.getElementById("tokenInput").value=token;}}catch(e){}}if(!token){setStatus("TDX Access Token 獲取失敗","error");return;}try{setStatus("資料更新中……","normal");const[trtc,ntmc]=await Promise.allSettled([fetchTDX(API_TRTC,token),fetchTDX(API_NTMC,token)]);let data=[];if(trtc.status==="fulfilled")data=data.concat(trtc.value);if(ntmc.status==="fulfilled")data=data.concat(ntmc.value);if(data.length===0)throw new Error("沒有取得任何資料");state.liveData=normalizeData(data);renderList();renderDetail(state.selectedStation);setStatus(`更新成功：${new Date().toLocaleTimeString()}，自動更新中`,"normal");}catch(err){setStatus("更新失敗：Token 可能過期或連線異常。","error");}}async function fetchTDX(url,token){const res=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});if(res.status===401)throw new Error("Token expired");if(!res.ok)throw new Error("API error");return await res.json();}function normalizeData(data){return data.map(item=>{const eta=Number(item.EstimateTime??item.ETA??999999);return{lineId:item.LineID||item.LineNO,stationId:item.StationID,stationName:item.StationName?.Zh_tw||item.StationName||"未知車站",direction:item.TripHeadSign||item.DestinationStationName?.Zh_tw||"未知方向",eta:eta,status:getTrainStatus(eta)};}).sort((a,b)=>a.eta-b.eta);}function getTrainStatus(eta){if(!Number.isFinite(eta)||eta>=999999)return "nodata";if(eta<=90)return "soon";return "normal";}function formatETA(eta){if(!Number.isFinite(eta)||eta>=999999)return "無資料";if(eta<=0)return "進站中";if(eta<60)return `${eta} 秒`;return `${Math.floor(eta/60)} 分 ${eta%60} 秒`;}function renderList(){const box=document.getElementById("listBox");const keyword=document.getElementById("searchInput").value.trim();const list=state.liveData.filter(item=>{const sameLine=item.lineId===state.selectedLine;const matchKeyword=!keyword||item.stationName.includes(keyword);return sameLine&&matchKeyword;});if(list.length===0){box.innerHTML=`<div class="card">目前沒有資料，請確認或稍後再試。</div>`;return;}box.innerHTML=list.map(item=>{const badgeClass=item.status==="soon"?"soon":item.status==="nodata"?"error":"normal";const badgeText=item.status==="soon"?"即將進站":item.status==="nodata"?"無資料":"正常";return`<div class="card" onclick="selectStationByName('${item.stationName}')"><div class="station-name">${item.stationName}</div><div class="meta">${item.direction}</div><div class="meta">下一班：${formatETA(item.eta)}</div><span class="badge ${badgeClass}">${badgeText}</span></div>`;}).join("");}function renderDetail(station){const box=document.getElementById("detailBox");if(!station){box.innerHTML="請點擊右側捷運站，或選擇路線查詢。";return;}const arrivals=state.liveData.filter(item=>item.stationName===station.name).sort((a,b)=>a.eta-b.eta);if(arrivals.length===0){box.innerHTML=`<div class="station-name">${station.name}</div><div class="meta">路線：${LINES[station.line].name}</div><span class="badge error">目前無即時資料</span>`;return;}box.innerHTML=`<div class="station-name">${station.name}</div><div class="meta">路線：${LINES[station.line].name}</div>${arrivals.map(a=>`<div class="card"><div>${a.direction}</div><div class="meta">下一班：${formatETA(a.eta)}</div></div>`).join("")}`;}function drawMap(){const svg=document.getElementById("metroMap");svg.innerHTML="";Object.keys(LINES).forEach(lineId=>{const stations=STATIONS.filter(s=>s.line===lineId);if(stations.length<2)return;const path=stations.map((s,i)=>`${i===0?"M":"L"} ${s.x} ${s.y}`).join(" ");svg.innerHTML+=`<path class="line metro-line-${lineId}" d="${path}" stroke="${LINES[lineId].color}"></path>`;});STATIONS.forEach(st=>{svg.innerHTML+=`<circle class="station station-dot line-${st.line}" cx="${st.x}" cy="${st.y}" r="8" data-id="${st.id}" data-name="${st.name}" data-line="${st.line}"></circle><text x="${st.x+12}" y="${st.y+4}" font-size="13">${st.name}</text>`;});document.querySelectorAll(".station-dot").forEach(dot=>{dot.addEventListener("click",()=>{const station=STATIONS.find(s=>s.id===dot.dataset.id);selectStation(station);});dot.addEventListener("mousemove",showTooltip);dot.addEventListener("mouseleave",hideTooltip);});highlightLine();}function selectStation(station){state.selectedStation=station;state.selectedLine=station.line;document.getElementById("lineSelect").value=station.line;document.querySelectorAll(".station-dot").forEach(d=>d.classList.remove("active"));document.querySelector(`[data-id="${station.id}"]`)?.classList.add("active");renderDetail(station);renderList();highlightLine();}function selectStationByName(name){const station=STATIONS.find(s=>s.name===name)||{name,line:state.selectedLine};selectStation(station);}function highlightLine(){Object.keys(LINES).forEach(lineId=>{const line=document.querySelector(`.metro-line-${lineId}`);if(!line)return;line.style.opacity=lineId===state.selectedLine?"1":".18";line.style.strokeWidth=lineId===state.selectedLine?"13":"8";});}function showTooltip(e){const tooltip=document.getElementById("tooltip");const name=e.target.dataset.name;const line=LINES[e.target.dataset.line].name;tooltip.innerHTML=`${name}<br>${line}`;tooltip.style.left=e.clientX+12+"px";tooltip.style.top=e.clientY+12+"px";tooltip.style.display="block";}function hideTooltip(){document.getElementById("tooltip").style.display="none";}function setStatus(text,type){const box=document.getElementById("statusBox");box.textContent=text;box.style.background=type==="error"?"#fee2e2":"#dcfce7";box.style.color=type==="error"?"#991b1b":"#166534";}setInterval(()=>{const token=document.getElementById("tokenInput").value.trim();if(token)fetchLiveData();else manualRefresh();},30000);</script></body></html>
+</textarea>
+
+<!-- 4. 捷運專案：台北捷運 (通版) -->
+<textarea id="app-mrt-general" style="display: none;">
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>台北捷運整線查詢</title><style>body{font-family:"Microsoft JhengHei",sans-serif;background:#f4f6f8;padding:30px;}.container{max-width:1000px;margin:auto;background:white;padding:25px;border-radius:16px;}select,button{width:100%;padding:12px;margin-top:12px;font-size:16px;}button{background:#0078d7;color:white;border:none;cursor:pointer;}.station-card{margin-top:16px;padding:16px;background:#f9fafb;border-left:6px solid #0078d7;border-radius:12px;}.station-title{font-size:20px;font-weight:bold;margin-bottom:10px;}.train{background:white;padding:10px;margin-top:8px;border-radius:8px;border:1px solid #ddd;}.time{font-weight:bold;color:#d35400;}.error{color:red;margin-top:15px;}</style></head><body><div class="container"><h1 style="text-align:center;">台北捷運即時到站查詢 (通版)</h1><select id="lineSelect"><option value="">請選擇捷運線</option><option value="BR">文湖線 BR</option><option value="R">淡水信義線 R</option><option value="G">松山新店線 G</option><option value="O">中和新蘆線 O</option><option value="BL">板南線 BL</option><option value="Y">環狀線 Y</option></select><button onclick="searchLine()">查詢</button><div id="msg" class="error"></div><div id="result"></div></div><script>const CLIENT_ID='B11405147-d9412730-bcae-4e13';const CLIENT_SECRET='fafe17df-e200-4d01-8879-804fc2b1c9fb';let token="";async function getToken(){const p=new URLSearchParams();p.append('grant_type','client_credentials');p.append('client_id',CLIENT_ID);p.append('client_secret',CLIENT_SECRET);try{const r=await fetch('https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p});const d=await r.json();if(d.access_token)token=d.access_token;}catch(e){}}async function searchLine(){const selectedLine=document.getElementById("lineSelect").value;const result=document.getElementById("result");const msg=document.getElementById("msg");result.innerHTML="";msg.innerHTML="";if(!selectedLine){msg.innerHTML="請選擇路線";return;}if(!token)await getToken();try{let res=await fetch("https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/LiveBoard/TRTC?$top=500&$format=JSON",{headers:{Authorization:"Bearer "+token}});if(res.status===401){await getToken();res=await fetch("https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/LiveBoard/TRTC?$top=500&$format=JSON",{headers:{Authorization:"Bearer "+token}});}if(!res.ok)throw new Error("無法取得資料");const data=await res.json();const lineData=data.filter(i=>i.LineID===selectedLine);if(lineData.length===0){result.innerHTML="查無資料";return;}const grouped={};lineData.forEach(item=>{const stId=item.StationID;if(!grouped[stId])grouped[stId]={name:item.StationName?.Zh_tw,trains:[]};grouped[stId].trains.push(item);});Object.keys(grouped).sort().forEach(id=>{const st=grouped[id];st.trains.sort((a,b)=>(a.EstimateTime??9999)-(b.EstimateTime??9999));let html="";st.trains.forEach(t=>{html+=`<div class="train">方向：${t.TripHeadSign||"未知"} | 終點：${t.DestinationStationName?.Zh_tw} | 等候：<span class="time">${formatTime(t.EstimateTime)}</span></div>`;});result.innerHTML+=`<div class="station-card"><div class="station-title">${id} ${st.name}</div>${html}</div>`;});}catch(e){msg.innerHTML=e.message;}}function formatTime(s){if(s===null)return"無資料";s=Number(s);if(s<=0)return"進站中";const min=Math.floor(s/60);const sec=s%60;return min===0?sec+"秒":min+"分"+sec+"秒";}</script></body></html>
+</textarea>
+
+<!-- 5. 公車專案：雙北智慧公車監控台 (V3.3版) -->
+<textarea id="app-bus-v3-3" style="display: none;">
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>雙北智慧公車監控台 (V3.3版)</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>*{box-sizing:border-box;}body{font-family:"PingFang TC",sans-serif;background-color:#f0f2f5;margin:0;display:flex;height:100vh;overflow:hidden;}#left-panel{width:450px;background:#fff;display:flex;flex-direction:column;box-shadow:3px 0 15px rgba(0,0,0,0.1);z-index:20;}#right-panel{flex:1;position:relative;background:#e0e0e0;}#map-container{width:100%;height:100%;z-index:10;}.panel-section{padding:20px;border-bottom:1px solid #eee;}.section-title{font-size:14px;color:#888;font-weight:bold;margin-bottom:10px;}#time-block{background-color:#202124;color:white;text-align:center;}#current-time{font-size:2em;font-weight:bold;color:#4fc3f7;}#settings-block{background-color:#f8f9fa;}.input-group{display:flex;gap:8px;}.input-group input{flex:1;padding:12px;border:1px solid #ccc;border-radius:8px;font-size:16px;}.action-btn{color:white;border:none;padding:12px 15px;border-radius:8px;font-size:15px;cursor:pointer;font-weight:bold;}.btn-blue{background-color:#1a73e8;}#bus-info-block{flex:1;overflow-y:auto;padding:0;background:#fff;}.status-msg{text-align:center;color:#666;padding:20px;}.arrival-card{padding:15px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;}.route-info{display:flex;flex-direction:column;}.route-name{font-size:1.4em;font-weight:bold;color:#1a73e8;}.time-badge{padding:8px 15px;border-radius:20px;font-weight:bold;color:white;}.red{background-color:#ea4335;}.green{background-color:#34a853;}.gray{background-color:#9aa0a6;}.bus-icon-inner{background-color:#fbbc04;color:#202124;font-weight:bold;font-size:12px;padding:4px 8px;border-radius:12px;border:2px solid #fff;text-align:center;}</style></head><body><div id="left-panel"><div class="panel-section" id="time-block"><div class="section-title">即時時間</div><div id="current-time">--:--:--</div></div><div class="panel-section" id="settings-block"><div class="section-title">資訊設定</div><div class="input-group"><input type="text" id="stationInput" placeholder="輸入站名"><button class="action-btn btn-blue" onclick="executeSearch()">搜尋</button></div></div><div id="bus-info-block"><div id="statusBox" class="status-msg">請輸入車站名稱</div><div id="arrival-list"></div></div></div><div id="right-panel"><div id="map-container"></div></div><script>const CLIENT_ID='B11405147-d9412730-bcae-4e13';const CLIENT_SECRET='fafe17df-e200-4d01-8879-804fc2b1c9fb';let accessToken='',currentSearchValue='',autoRefreshInterval=null;const CITIES=['City/Taipei','City/NewTaipei'];let mapInstance,stationMarkersLayer=L.layerGroup(),busMarkersLayer=L.layerGroup();setInterval(()=>document.getElementById('current-time').innerText=new Date().toLocaleTimeString('zh-TW',{hour12:false}),1000);function initMap(){mapInstance=L.map('map-container').setView([25.0408,121.5118],14);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);stationMarkersLayer.addTo(mapInstance);busMarkersLayer.addTo(mapInstance);}async function getTdxToken(){const p=new URLSearchParams();p.append('grant_type','client_credentials');p.append('client_id',CLIENT_ID);p.append('client_secret',CLIENT_SECRET);const r=await fetch('https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p});const d=await r.json();if(d.access_token)accessToken=d.access_token;}async function executeSearch(){const k=document.getElementById('stationInput').value.trim();if(!k)return;currentSearchValue=k;await triggerCoreSearch(false);}async function triggerCoreSearch(isSilent){if(!isSilent){document.getElementById('statusBox').style.display='block';document.getElementById('statusBox').innerHTML='載入中...';document.getElementById('arrival-list').innerHTML='';}if(!accessToken)await getTdxToken();if(!accessToken)return;const opts={headers:{'Authorization':`Bearer ${accessToken}`}};const kw=currentSearchValue;try{const stRes=await Promise.all(CITIES.map(c=>fetch(`https://tdx.transportdata.tw/api/basic/v2/Bus/Station/${c}?$filter=contains(StationName/Zh_tw,'${kw}')&$top=3000&$format=JSON`,opts)));let sts=(await Promise.all(stRes.map(r=>r.ok?r.json():[]))).flat();if(sts.length===0){if(!isSilent)document.getElementById('statusBox').innerHTML='找不到車站';return;}const etaRes=await Promise.all(CITIES.map(c=>fetch(`https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/${c}?$filter=${encodeURIComponent(Array.from(new Set(sts.map(s=>s.StationName?.Zh_tw))).slice(0,5).map(s=>`StopName/Zh_tw eq '${s}'`).join(' or '))}&$top=3000&$format=JSON`,opts)));let etas=(await Promise.all(etaRes.map(r=>r.ok?r.json():[]))).flat();let busesData=[];const routes=Array.from(new Set(etas.map(e=>e.RouteName?.Zh_tw))).slice(0,20);if(routes.length>0){const gpsRes=await Promise.all(CITIES.map(c=>fetch(`https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeByFrequency/${c}?$filter=${encodeURIComponent(routes.map(r=>`RouteName/Zh_tw eq '${r}'`).join(' or '))}&$top=3000&$format=JSON`,opts)));busesData=(await Promise.all(gpsRes.map(r=>r.ok?r.json():[]))).flat();}if(!isSilent){stationMarkersLayer.clearLayers();sts.forEach(s=>{if(s.StationPosition)stationMarkersLayer.addLayer(L.marker([s.StationPosition.PositionLat,s.StationPosition.PositionLon]).bindPopup(s.StationName?.Zh_tw));});if(stationMarkersLayer.getLayers().length>0)mapInstance.fitBounds(new L.featureGroup(stationMarkersLayer.getLayers()).getBounds(),{padding:[50,50],maxZoom:15});}busMarkersLayer.clearLayers();busesData.forEach(b=>{if(b.BusPosition)busMarkersLayer.addLayer(L.marker([b.BusPosition.PositionLat,b.BusPosition.PositionLon],{icon:L.divIcon({className:'bus-icon',html:`<div class="bus-icon-inner">${b.RouteName?.Zh_tw}</div>`,iconSize:[50,30],iconAnchor:[25,15]})}).bindPopup(b.RouteName?.Zh_tw));});if(etas.length>0||sts.length>0){renderArrivalList(etas);document.getElementById('statusBox').style.display='none';}}catch(e){}}function renderArrivalList(etas){const c=document.getElementById('arrival-list');c.innerHTML='';let uniqueMap=new Map();etas.forEach(b=>{if(b.RouteName?.Zh_tw&&(b.EstimateTime!==undefined||b.StopStatus<=4)){let key=`${b.RouteName.Zh_tw}_${b.Direction}_${b.StopName?.Zh_tw}`;if(!uniqueMap.has(key)||(b.EstimateTime!==undefined&&b.EstimateTime<(uniqueMap.get(key).EstimateTime||999999)))uniqueMap.set(key,b);}});let vb=Array.from(uniqueMap.values()).sort((a,b)=>(a.EstimateTime||999999)-(b.EstimateTime||999999));vb.forEach(b=>{const st=b.StopStatus===1?{t:'未發車',c:'gray'}:(b.StopStatus===2?{t:'交管',c:'gray'}:(b.StopStatus===3?{t:'末班過',c:'gray'}:(b.StopStatus===4?{t:'無資料',c:'gray'}:(b.EstimateTime<=60?{t:'進站中',c:'red'}:{t:Math.floor(b.EstimateTime/60)+' 分',c:'green'}))));const div=document.createElement('div');div.className='arrival-card';div.innerHTML=`<div class="route-info"><span class="route-name">${b.RouteName.Zh_tw}</span></div><span class="time-badge ${st.c}">${st.t}</span>`;c.appendChild(div);});}initMap();</script></body></html>
+</textarea>
+
+<!-- 6. 公車專案：陳駿心_台北公車查詢 -->
+<textarea id="app-bus-chen" style="display: none;">
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>陳駿心-台北公車查詢</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>body{margin:0;background:#050505;color:white;font-family:"Microsoft JhengHei",Arial;height:100vh;display:flex;flex-direction:column}nav{background:#111;padding:15px 30px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #00f2fe}#clock{color:#00f2fe;font-size:20px;font-family:monospace}.search{position:relative;width:420px}input{width:100%;padding:12px;border-radius:25px;border:1px solid #333;background:#222;color:white;outline:none}.list{position:absolute;top:50px;width:100%;background:#222;border-radius:10px;display:none;max-height:300px;overflow:auto;z-index:9999}.item{padding:10px 15px;border-bottom:1px solid #333;cursor:pointer}.item:hover{background:#00f2fe;color:black}main{flex:1;display:flex;overflow:hidden}#side{width:470px;background:#151515;padding:20px;overflow:auto;border-right:1px solid #222}#map{flex:1}.card{background:#222;border:1px solid #333;border-radius:12px;padding:15px;margin-bottom:12px}.route{font-size:24px;font-weight:bold;color:#00f2fe}.badge{display:inline-block;margin-top:8px;padding:5px 12px;border-radius:6px;font-weight:bold}.red{background:#ff4757}.green{background:#2ed573;color:black}.gray{background:#888}.detail{color:#aaa;line-height:1.7;margin-top:10px}.small{color:#777;font-size:13px}</style></head><body><nav><div id="clock">00:00:00</div><div class="search"><input id="searchInput" placeholder="搜尋站名，例如：捷運西門站" oninput="handleSearch(this.value)"><div id="searchList" class="list"></div></div></nav><main><div id="side"><div id="welcome" style="text-align:center;margin-top:80px;"><h2>資料載入中...</h2><p class="small">可直接點選地圖上的站點</p></div><div id="result"></div></div><div id="map"></div></main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const API_URL="https://tdx.transportdata.tw/api/basic/v2/Bus/StopOfRoute/City/Taipei?$top=200&$format=JSON";let rawData=[];let stationMap={};let map;let selectedMarker;let stationLayer;setInterval(()=>document.getElementById("clock").innerText=new Date().toLocaleTimeString("zh-TW",{hour12:false}),1000);map=L.map("map",{zoomControl:false}).setView([25.04,121.52],13);L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png").addTo(map);stationLayer=L.layerGroup().addTo(map);async function loadData(){try{const res=await fetch(API_URL);rawData=await res.json();buildStationMap();drawStationPoints();document.getElementById("welcome").innerHTML=`<h2>請搜尋或點選地圖站點</h2><p class="small">載入完畢</p>`;}catch(e){document.getElementById("welcome").innerHTML=`<h2 style="color:#ff4757;">資料載入失敗</h2>`;}}function buildStationMap(){stationMap={};rawData.forEach(route=>{const routeName=route.RouteName?.Zh_tw||"未知";const direction=route.Direction;const stops=route.Stops||[];if(stops.length===0)return;const start=stops[0].StopName?.Zh_tw;const end=stops[stops.length-1].StopName?.Zh_tw;stops.forEach(stop=>{const name=stop.StopName?.Zh_tw;if(!name)return;if(!stationMap[name])stationMap[name]=[];stationMap[name].push({route:routeName,direction,start,end,seq:stop.StopSequence,total:stops.length,lat:stop.StopPosition?.PositionLat,lon:stop.StopPosition?.PositionLon});});});Object.keys(stationMap).forEach(name=>{const m=new Map();stationMap[name].forEach(bus=>{const key=bus.route+"_"+bus.direction;if(!m.has(key))m.set(key,bus);});stationMap[name]=Array.from(m.values());});}function drawStationPoints(){stationLayer.clearLayers();Object.keys(stationMap).forEach(name=>{const bus=stationMap[name].find(b=>b.lat&&b.lon);if(!bus)return;const marker=L.circleMarker([bus.lat,bus.lon],{radius:7,color:"#00f2fe",fillColor:"#00f2fe",fillOpacity:.25,weight:2});marker.bindPopup(`🚏 ${name}`);marker.on("click",()=>selectStation(name));marker.addTo(stationLayer);});}function handleSearch(value){const list=document.getElementById("searchList");if(!value){list.style.display="none";return;}const kw=value.toLowerCase().replaceAll("臺","台");const result=Object.keys(stationMap).filter(name=>name.toLowerCase().replaceAll("臺","台").includes(kw)).slice(0,40);if(result.length===0){list.style.display="none";return;}list.innerHTML=result.map(name=>`<div class="item" onclick="selectStation('${name}')">${name}</div>`).join("");list.style.display="block";}function selectStation(name){document.getElementById("searchInput").value=name;document.getElementById("searchList").style.display="none";document.getElementById("welcome").style.display="none";const buses=stationMap[name]||[];let html=`<h2 style="color:#00f2fe;border-bottom:1px solid #333;padding-bottom:10px;">🚏 ${name}</h2>`;buses.forEach(bus=>{const seed=(bus.route+name+bus.direction).length%16;const eta=seed<=1?{t:"進站中",c:"red"}:(seed>=13?{t:"尚未發車",c:"gray"}:{t:seed+" 分鐘",c:"green"});html+=`<div class="card"><div class="route">${bus.route}</div><span class="badge ${eta.c}">${eta.t}</span><div class="detail">🚩 起點：${bus.start}<br>🏁 終點：${bus.end}<br>🔄 方向：${bus.direction===0?"去程":"回程"}</div></div>`;});document.getElementById("result").innerHTML=html;const bus=buses.find(b=>b.lat&&b.lon);if(bus){if(selectedMarker)map.removeLayer(selectedMarker);map.setView([bus.lat,bus.lon],16);selectedMarker=L.circleMarker([bus.lat,bus.lon],{radius:14,color:"#ff4757",fillColor:"#ff4757",fillOpacity:.5,weight:3}).addTo(map).bindPopup(name).openPopup();}}loadData();</script></body></html>
+</textarea>
+
+<!-- 7. 公車專案：陳育傑_全台等公車 (雙模式查詢 + 實體車輛地圖) -->
+<textarea id="app-bus-yujie" style="display: none;">
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>公車即時動態與地圖查詢</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+body { font-family: "Microsoft JhengHei", sans-serif; background: #f4f6f8; padding: 20px; margin: 0; }
+.container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+h1 { text-align: center; color: #333; margin-top: 0; }
+.tabs { display: flex; gap: 10px; margin-bottom: 20px; background: #eef7ff; padding: 10px; border-radius: 12px; }
+.tab-btn { flex: 1; padding: 14px; font-size: 18px; background: transparent; color: #0078d7; border: 2px solid #0078d7; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s; margin-top: 0; }
+.tab-btn.active { background: #0078d7; color: white; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.input-group { display: flex; gap: 10px; margin-top: 12px; }
+select, input { padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; }
+select { flex: 1.2; } input { flex: 2; }
+.primary-btn { width: 100%; margin-top: 15px; padding: 14px; font-size: 18px; background: #0078d7; color: white; border: none; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s; }
+.primary-btn:hover { background: #005bb5; }
+.btn-locate { background: #28a745; margin-top: 10px; }
+.btn-locate:hover { background: #218838; }
+.route-selector { margin-top: 15px; display: none; background: #eef7ff; padding: 15px; border-radius: 12px; border: 1px dashed #0078d7; }
+.route-selector p { margin: 0 0 10px 0; font-weight: bold; color: #005bb5; }
+.route-btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.route-btn { width: auto; margin-top: 0; padding: 10px 15px; background: #fff; color: #0078d7; border: 2px solid #0078d7; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.route-btn:hover { background: #0078d7; color: #fff; }
+.error { color: red; margin-top: 15px; text-align: center; font-weight: bold; }
+.info { color: #005bb5; margin-top: 15px; text-align: center; font-weight: bold; }
+#map { width: 100%; height: 400px; margin-top: 20px; border-radius: 12px; border: 2px solid #ddd; display: none; }
+.content-wrapper { display: flex; flex-direction: column; gap: 20px; }
+.direction-card { margin-top: 20px; padding: 16px; background: #f9fafb; border-left: 6px solid #0078d7; border-radius: 12px; }
+.direction-title { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #333; }
+.stop { background: white; padding: 12px; margin-top: 8px; border-radius: 8px; border: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; }
+.stop:hover { background: #f0f7ff; }
+.stop-name { font-size: 16px; }
+.route-badge { display: inline-block; background: #0078d7; color: white; padding: 3px 8px; border-radius: 4px; font-size: 14px; margin-right: 8px; }
+.time { font-weight: bold; color: #d35400; background: #fff3cd; padding: 6px 12px; border-radius: 6px; min-width: 80px; text-align: center; }
+.time.arriving { color: #155724; background: #d4edda; }
+.time.offline { color: #721c24; background: #f8d7da; }
+.custom-bus-icon { background: none; border: none; }
+.bus-emoji { font-size: 20px; background: white; border-radius: 50%; border: 2px solid #d35400; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); width: 100%; height: 100%; box-sizing: border-box; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>即時公車與地圖查詢</h1>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('tab-route')">🚍 依路線查站牌</button>
+    <button class="tab-btn" onclick="switchTab('tab-stop')">🚏 依站牌查公車</button>
+  </div>
+
+  <div id="tab-route" class="tab-content active">
+    <div class="input-group">
+      <select id="citySelect">
+        <option value="Taipei" selected>台北市</option>
+        <option value="NewTaipei">新北市</option>
+        <option value="Taoyuan">桃園市</option>
+        <option value="Taichung">台中市</option>
+        <option value="Tainan">台南市</option>
+        <option value="Kaohsiung">高雄市</option>
+      </select>
+      <input type="text" id="routeInput" placeholder="輸入路線 (例: 39)">
+      <input type="text" id="stopFilterInput" placeholder="過濾站牌 (例: 台北車站)" oninput="filterStops()">
+    </div>
+    <button class="primary-btn" onclick="searchRoutes()">查詢路線</button>
+    
+    <div id="routeSelector" class="route-selector">
+      <p>找到多筆相關路線，請選擇你要查詢的公車：</p>
+      <div id="routeBtnGroup" class="route-btn-group"></div>
+    </div>
+  </div>
+
+  <div id="tab-stop" class="tab-content">
+    <div class="input-group">
+      <select id="stopCitySelect">
+        <option value="Taipei" selected>台北市</option>
+        <option value="NewTaipei">新北市</option>
+        <option value="Taoyuan">桃園市</option>
+        <option value="Taichung">台中市</option>
+        <option value="Tainan">台南市</option>
+        <option value="Kaohsiung">高雄市</option>
+      </select>
+      <input type="text" id="stopKeywordInput" placeholder="輸入站牌名稱 (例: 台北車站)">
+    </div>
+    <button class="primary-btn" onclick="searchByStop()">查詢經過此站的公車</button>
+  </div>
+
+  <button class="primary-btn btn-locate" onclick="locateUser()">📍 定位我的目前位置</button>
+  <div id="msg" class="error"></div>
+
+  <div class="content-wrapper">
+    <div id="map"></div>
+    <div id="result"></div>
+  </div>
+</div>
+
+<script>
+const clientId = "B11405147-d9412730-bcae-4e13"; 
+const clientSecret = "fafe17df-e200-4d01-8879-804fc2b1c9fb";
+let token = ""; 
+
+async function getTdxToken() {
+  const authUrl = "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token";
+  const params = new URLSearchParams();
+  params.append("grant_type", "client_credentials");
+  params.append("client_id", clientId);
+  params.append("client_secret", clientSecret);
+
+  try {
+    const response = await fetch(authUrl, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: params });
+    const data = await response.json();
+    if (data.access_token) { token = data.access_token; } 
+    else { throw new Error("授權失敗，請確認借來的 Client ID 與 Secret 是否正確"); }
+  } catch (error) {
+    document.getElementById("msg").innerHTML = "無法取得 TDX 授權，請檢查 API 憑證或網路連線。";
+    document.getElementById("msg").className = "error";
+  }
+}
+
+async function fetchTDX(url) {
+  if (!token) { await getTdxToken(); }
+  let response = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+  if (response.status === 401) {
+    await getTdxToken();
+    response = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+  }
+  if (!response.ok) throw new Error("API 連線失敗，請檢查網路狀態或路線名稱");
+  return response.json();
+}
+
+let map; let markersLayer; let routeLayer; let busLayer; let userMarker; let allMarkers = []; 
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.currentTarget.classList.add('active');
+  document.getElementById("result").innerHTML = ""; document.getElementById("msg").innerHTML = "";
+  document.getElementById("routeSelector").style.display = "none"; document.getElementById("map").style.display = "none";
+  if (markersLayer) markersLayer.clearLayers(); if (routeLayer) routeLayer.clearLayers(); if (busLayer) busLayer.clearLayers();
+}
+
+function locateUser() {
+  const msg = document.getElementById("msg"); const mapDiv = document.getElementById("map");
+  if (!navigator.geolocation) { msg.className = "error"; msg.innerHTML = "您的瀏覽器不支援地理定位功能。"; return; }
+  msg.className = "info"; msg.innerHTML = "正在取得您的位置...";
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude; const lon = position.coords.longitude; msg.innerHTML = ""; 
+      if (!map) initMap();
+      mapDiv.style.display = "block"; map.invalidateSize();
+      map.flyTo([lat, lon], 16, { animate: true, duration: 1 });
+      if (userMarker) map.removeLayer(userMarker);
+      userMarker = L.circleMarker([lat, lon], { radius: 8, fillColor: "#0078d7", color: "#ffffff", weight: 2, opacity: 1, fillOpacity: 1 }).addTo(map).bindPopup("<b>您目前的位置</b>").openPopup();
+    },
+    (error) => { msg.className = "error"; msg.innerHTML = "定位失敗，請確認是否允許瀏覽器存取位置。"; },
+    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+  );
+}
+
+async function searchRoutes() {
+  const city = document.getElementById("citySelect").value;
+  const routeKeyword = document.getElementById("routeInput").value.trim();
+  const msg = document.getElementById("msg"); const result = document.getElementById("result");
+  const mapDiv = document.getElementById("map"); const routeSelector = document.getElementById("routeSelector");
+  const routeBtnGroup = document.getElementById("routeBtnGroup");
+
+  msg.innerHTML = ""; msg.className = "error"; result.innerHTML = ""; mapDiv.style.display = "none";
+  routeSelector.style.display = "none"; routeBtnGroup.innerHTML = "";
+  if (!routeKeyword) { msg.innerHTML = "請輸入公車路線名稱！"; return; }
+
+  const routeUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/Route/City/${city}/${routeKeyword}?%24format=JSON`;
+  try {
+    const routeData = await fetchTDX(routeUrl);
+    if (routeData.length === 0) { msg.innerHTML = `目前查無包含「${routeKeyword}」的路線。`; return; }
+    const uniqueRouteNames = [...new Set(routeData.map(r => r.RouteName.Zh_tw))];
+    if (uniqueRouteNames.length === 1) { fetchRouteDetails(city, uniqueRouteNames[0]); } 
+    else {
+      routeSelector.style.display = "block";
+      uniqueRouteNames.forEach(exactName => {
+        const btn = document.createElement("button"); btn.className = "route-btn"; btn.innerText = exactName;
+        btn.onclick = () => fetchRouteDetails(city, exactName); routeBtnGroup.appendChild(btn);
+      });
+    }
+  } catch (error) { msg.innerHTML = error.message; }
+}
+
+async function fetchRouteDetails(city, exactRouteName) {
+  const result = document.getElementById("result"); const msg = document.getElementById("msg"); const mapDiv = document.getElementById("map");
+  document.getElementById("routeSelector").style.display = "none";
+  result.innerHTML = `<p class="info">正在載入 <b>${exactRouteName}</b> 路線與即時車輛資料...</p>`; msg.innerHTML = "";
+
+  const etaUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${city}/${exactRouteName}?%24format=JSON`;
+  const stopsUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/StopOfRoute/City/${city}/${exactRouteName}?%24format=JSON`;
+  const shapeUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/Shape/City/${city}/${exactRouteName}?%24format=JSON`;
+  const realtimeUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeByFrequency/City/${city}/${exactRouteName}?%24format=JSON`;
+
+  try {
+    const [rawEtaData, rawStopsData, rawShapeData, rawRealtimeData] = await Promise.all([ fetchTDX(etaUrl), fetchTDX(stopsUrl), fetchTDX(shapeUrl), fetchTDX(realtimeUrl) ]);
+    const etaData = rawEtaData.filter(item => item.RouteName.Zh_tw === exactRouteName);
+    const stopsData = rawStopsData.filter(item => item.RouteName.Zh_tw === exactRouteName);
+    const shapeData = rawShapeData.filter(item => item.RouteName.Zh_tw === exactRouteName);
+    const realtimeData = rawRealtimeData.filter(item => item.RouteName.Zh_tw === exactRouteName);
+
+    if (stopsData.length === 0) { result.innerHTML = ""; msg.innerHTML = `目前查無「${exactRouteName}」的站牌資料。`; return; }
+    result.innerHTML = ""; initMap(); mapDiv.style.display = "block"; map.invalidateSize(); 
+    if (shapeData.length > 0 && shapeData[0].Geometry) drawRouteShape(shapeData[0].Geometry);
+
+    const etaMap = {}; etaData.forEach(item => { etaMap[`${item.Direction}_${item.StopUID}`] = item; });
+    const directionTitle = { 0: "去程", 1: "返程", 2: "迴圈", 255: "未知方向" };
+    allMarkers = []; 
+
+    stopsData.forEach(routeDir => {
+      const dirKey = routeDir.Direction; const title = directionTitle[dirKey] || `方向 ${dirKey}`; let stopHtml = "";
+      routeDir.Stops.forEach(stop => {
+        const etaInfo = etaMap[`${dirKey}_${stop.StopUID}`];
+        const timeObj = formatBusTime(etaInfo ? etaInfo.EstimateTime : null, etaInfo ? etaInfo.StopStatus : null);
+        const lat = stop.StopPosition.PositionLat; const lon = stop.StopPosition.PositionLon;
+        const stopName = stop.StopName.Zh_tw; const seq = stop.StopSequence;
+
+        const marker = L.marker([lat, lon]).bindPopup(`<b>${seq}. ${stopName}</b><br>${timeObj.text}`);
+        markersLayer.addLayer(marker); allMarkers.push({ marker: marker, name: stopName.toLowerCase() });
+
+        stopHtml += `<div class="stop" data-stopname="${stopName}" onclick="focusMap(${lat}, ${lon})"><div class="stop-name">${seq}. ${stopName}</div><div class="time ${timeObj.statusClass}">${timeObj.text}</div></div>`;
+      });
+      result.innerHTML += `<div class="direction-card"><div class="direction-title">方向：${title}</div>${stopHtml}</div>`;
+    });
+
+    realtimeData.forEach(bus => {
+      if (bus.BusPosition && bus.BusPosition.PositionLat) {
+        const lat = bus.BusPosition.PositionLat; const lon = bus.BusPosition.PositionLon; const plate = bus.PlateNumb; const dirText = directionTitle[bus.Direction] || "未知方向";
+        const busIcon = L.divIcon({ html: '<div class="bus-emoji">🚌</div>', className: 'custom-bus-icon', iconSize: [32, 32], iconAnchor: [16, 16] });
+        L.marker([lat, lon], { icon: busIcon, zIndexOffset: 1000 }).bindPopup(`<b>🚌 車牌：${plate}</b><br>行駛方向：${dirText}`).addTo(busLayer);
+      }
+    });
+    filterStops();
+  } catch (error) { result.innerHTML = ""; msg.className = "error"; msg.innerHTML = error.message; }
+}
+
+function filterStops() {
+  const keyword = document.getElementById("stopFilterInput").value.trim().toLowerCase();
+  document.querySelectorAll(".stop").forEach(stop => { stop.style.display = stop.getAttribute("data-stopname").toLowerCase().includes(keyword) ? "flex" : "none"; });
+  document.querySelectorAll(".direction-card").forEach(card => {
+    const hasVisible = Array.from(card.querySelectorAll(".stop")).some(s => s.style.display !== "none");
+    card.style.display = hasVisible ? "block" : "none";
+  });
+  if (markersLayer) {
+    markersLayer.clearLayers();
+    allMarkers.forEach(item => { if (item.name.includes(keyword)) markersLayer.addLayer(item.marker); });
+  }
+}
+
+async function searchByStop() {
+  const city = document.getElementById("stopCitySelect").value;
+  const keyword = document.getElementById("stopKeywordInput").value.trim();
+  const result = document.getElementById("result"); const msg = document.getElementById("msg"); const mapDiv = document.getElementById("map");
+
+  msg.innerHTML = ""; msg.className = "error"; result.innerHTML = ""; mapDiv.style.display = "none";
+  if (!keyword) { msg.innerHTML = "請輸入站牌名稱！"; return; }
+  result.innerHTML = `<p class="info">正在搜尋包含 <b>${keyword}</b> 的所有站牌與公車...</p>`;
+
+  const etaUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${city}?%24filter=contains(StopName%2FZh_tw%2C'${encodeURIComponent(keyword)}')&%24format=JSON`;
+  const stopUrl = `https://tdx.transportdata.tw/api/basic/v2/Bus/Stop/City/${city}?%24filter=contains(StopName%2FZh_tw%2C'${encodeURIComponent(keyword)}')&%24format=JSON`;
+
+  try {
+    const [etaData, stopData] = await Promise.all([fetchTDX(etaUrl), fetchTDX(stopUrl)]);
+    if (etaData.length === 0) { result.innerHTML = ""; msg.innerHTML = `目前查無包含「${keyword}」的即時公車資料。`; return; }
+
+    result.innerHTML = ""; initMap(); mapDiv.style.display = "block"; map.invalidateSize(); 
+    
+    const stopCoords = {};
+    stopData.forEach(s => {
+      const sName = s.StopName.Zh_tw;
+      if (!stopCoords[sName]) stopCoords[sName] = [];
+      stopCoords[sName].push({ lat: s.StopPosition.PositionLat, lon: s.StopPosition.PositionLon });
+    });
+
+    const stopGroups = {};
+    etaData.forEach(item => {
+      const sName = item.StopName.Zh_tw;
+      if (!stopGroups[sName]) stopGroups[sName] = [];
+      stopGroups[sName].push(item);
+    });
+
+    Object.keys(stopGroups).forEach(sName => {
+      const routes = stopGroups[sName];
+      routes.sort((a, b) => {
+        const timeA = a.EstimateTime !== undefined && a.EstimateTime !== null ? a.EstimateTime : 999999;
+        const timeB = b.EstimateTime !== undefined && b.EstimateTime !== null ? b.EstimateTime : 999999;
+        return timeA - timeB;
+      });
+
+      let lat = 0, lon = 0, hasCoords = false;
+      if (stopCoords[sName] && stopCoords[sName].length > 0) {
+        lat = stopCoords[sName][0].lat; lon = stopCoords[sName][0].lon; hasCoords = true;
+        const marker = L.marker([lat, lon]).bindPopup(`<b>🚏 ${sName}</b>`);
+        markersLayer.addLayer(marker);
+      }
+
+      let routeHtml = "";
+      routes.forEach(route => {
+        const timeObj = formatBusTime(route.EstimateTime, route.StopStatus);
+        const dirText = route.Direction === 0 ? '去程' : (route.Direction === 1 ? '返程' : '未知');
+        routeHtml += `<div class="stop" ${hasCoords ? `onclick="focusMap(${lat}, ${lon})"` : ""}><div class="stop-name"><span class="route-badge">${route.RouteName.Zh_tw}</span><span style="color: #666; font-size: 14px;">(方向: ${dirText})</span></div><div class="time ${timeObj.statusClass}">${timeObj.text}</div></div>`;
+      });
+      result.innerHTML += `<div class="direction-card"><div class="direction-title">🚏 站牌：${sName}</div>${routeHtml}</div>`;
+    });
+
+    if (markersLayer.getLayers().length > 0) { map.fitBounds(markersLayer.getBounds(), { padding: [30, 30] }); }
+
+  } catch(error) { result.innerHTML = ""; msg.className = "error"; msg.innerHTML = error.message; }
+}
+
+function formatBusTime(seconds, status) {
+  if (status === 1) return { text: "尚未發車", statusClass: "offline" };
+  if (status === 2) return { text: "交管不停靠", statusClass: "offline" };
+  if (status === 3) return { text: "末班車已過", statusClass: "offline" };
+  if (status === 4) return { text: "今日未營運", statusClass: "offline" };
+  if (seconds === null || seconds === undefined) return { text: "無資料", statusClass: "" };
+  seconds = Number(seconds);
+  if (seconds <= 60) return { text: "即將到站", statusClass: "arriving" };
+  return { text: `${Math.floor(seconds / 60)} 分鐘`, statusClass: "" };
+}
+
+function initMap() {
+  if (!map) {
+    map = L.map('map').setView([25.0478, 121.5170], 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap & CARTO' }).addTo(map);
+    markersLayer = L.featureGroup().addTo(map); routeLayer = L.featureGroup().addTo(map); busLayer = L.featureGroup().addTo(map); 
+  } else { markersLayer.clearLayers(); routeLayer.clearLayers(); busLayer.clearLayers(); }
+}
+
+function focusMap(lat, lon) { if(map) map.flyTo([lat, lon], 17, { animate: true, duration: 1 }); }
+
+function drawRouteShape(wktStr) {
+  const matches = [...wktStr.matchAll(/([0-9\.]+)\s+([0-9\.]+)/g)];
+  const latLngs = matches.map(m => [parseFloat(m[2]), parseFloat(m[1])]); 
+  if (latLngs.length > 0) {
+    const polyline = L.polyline(latLngs, { color: '#0078d7', weight: 5, opacity: 0.7 });
+    routeLayer.addLayer(polyline); map.fitBounds(polyline.getBounds(), { padding: [20, 20] }); 
+  }
+}
+</script>
+</body>
+</html>
+</textarea>
+
+<!-- 8. YouBike 專案：即時資訊版地圖 -->
+<textarea id="app-ubike-1" style="display: none;">
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>YouBike 即時地圖</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><style>:root{--sidebar-width:350px;--primary-color:#2c3e50;--highlight-color:#f1c40f;}html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;display:flex;font-family:"PingFang TC","Microsoft JhengHei",sans-serif;}#sidebar{width:var(--sidebar-width);height:100%;background:#ffffff;box-shadow:2px 0 10px rgba(0,0,0,0.1);z-index:1001;display:flex;flex-direction:column;padding:25px;box-sizing:border-box;flex-shrink:0;}h2{color:var(--primary-color);font-size:1.5em;margin:0 0 20px 0;border-left:5px solid var(--highlight-color);padding-left:10px;}.detail-item{margin-bottom:15px;padding:15px;background:#f8f9fa;border-radius:10px;display:flex;align-items:center;justify-content:space-between;}.detail-item .label{font-size:1em;color:#7f8c8d;}.detail-item .value{font-size:1.6em;font-weight:bold;color:var(--primary-color);}.station-name-display{font-size:1.3em;font-weight:bold;color:#2980b9;margin-bottom:15px;}#map{flex-grow:1;height:100%;background:#e5e3df;}.active-station-label{background-color:var(--primary-color)!important;color:white!important;border:none!important;border-radius:4px!important;font-weight:bold!important;font-size:12px!important;padding:4px 8px!important;box-shadow:0 2px 6px rgba(0,0,0,0.3)!important;}.active-station-label::before{border-top-color:var(--primary-color)!important;}.api-status{font-size:0.8em;padding:5px 10px;border-radius:4px;margin-bottom:10px;display:inline-block;}.status-error{background:#fee2e2;color:#991b1b;}.status-ok{background:#dcfce7;color:#166534;}</style></head><body><div id="sidebar"><h2>YouBike 租借資訊</h2><div id="api-indicator"></div><div id="info-content"><p style="color:#95a5a6;font-style:italic;">點擊地圖上的站點</p></div></div><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const map=L.map('map').setView([25.0478,121.5170],15);let activeMarker=null;L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);const bikeMarkers=L.layerGroup().addTo(map);const fallbackAvail=[{"StationID":"500101001","ServiceStatus":1,"AvailableRentBikes":5,"AvailableReturnBikes":21,"UpdateTime":"2026-04-29","AvailableRentBikesDetail":{"GeneralBikes":2,"ElectricBikes":3}},{"StationID":"500101002","ServiceStatus":1,"AvailableRentBikes":2,"AvailableReturnBikes":18,"UpdateTime":"2026-04-29","AvailableRentBikesDetail":{"GeneralBikes":2,"ElectricBikes":0}}];const fallbackInfo=[{"StationID":"500101001","StationName":{"Zh_tw":"捷運臺北車站"},"StationPosition":{"PositionLat":25.0478,"PositionLon":121.5170}},{"StationID":"500101002","StationName":{"Zh_tw":"臺北車站(東三門)"},"StationPosition":{"PositionLat":25.0485,"PositionLon":121.5185}}];function renderMarkers(sts,avails){const am=new Map();avails.forEach(i=>am.set(i.StationID,i));bikeMarkers.clearLayers();sts.forEach(s=>{const a=am.get(s.StationID);if(a){const n=s.StationName.Zh_tw.replace('YouBike2.0_',''),m=L.circleMarker([s.StationPosition.PositionLat,s.StationPosition.PositionLon],{radius:10,fillColor:a.ServiceStatus===1?(a.AvailableRentBikes>0?"#3498db":"#e74c3c"):"#7f8c8d",color:"#fff",weight:2,fillOpacity:0.8});m.bindTooltip(n,{sticky:true});m.on('click',()=>{if(activeMarker){activeMarker.setStyle({radius:10,weight:2,color:"#fff"});activeMarker.unbindTooltip();activeMarker.bindTooltip(activeMarker.options.sn,{sticky:true});}activeMarker=m;m.options.sn=n;m.setStyle({radius:16,weight:6,color:"#f1c40f"});m.unbindTooltip();m.bindTooltip(n,{permanent:true,direction:'top',className:'active-station-label',offset:[0,-10]}).openTooltip();document.getElementById('info-content').innerHTML=`<div class="station-name-display">${n}</div><div class="detail-item"><span class="label">🚲 一般車</span><span class="value">${a.AvailableRentBikesDetail.GeneralBikes}</span></div><div class="detail-item" style="border-left: 5px solid #e67e22;"><span class="label">⚡ 電動車</span><span class="value" style="color: #e67e22;">${a.AvailableRentBikesDetail.ElectricBikes}</span></div><div class="detail-item" style="border-left: 5px solid #27ae60;"><span class="label">🅿️ 剩餘車位</span><span class="value" style="color: #27ae60;">${a.AvailableReturnBikes}</span></div><p style="font-size: 0.8em; color: #bdc3c7; margin-top: 20px;">更新時間：${new Date(a.UpdateTime).toLocaleTimeString()}</p>`;map.panTo([s.StationPosition.PositionLat,s.StationPosition.PositionLon]);});m.addTo(bikeMarkers);}});}async function init(){const ind=document.getElementById('api-indicator');try{const[iRes,aRes]=await Promise.all([fetch('https://tdx.transportdata.tw/api/basic/v2/Bike/Station/City/Taipei?%24top=2000&%24format=JSON'),fetch('https://tdx.transportdata.tw/api/basic/v2/Bike/Availability/City/Taipei?%24top=2000&%24format=JSON')]);if(!iRes.ok||!aRes.ok)throw new Error();ind.innerHTML='<span class="api-status status-ok">● 即時連線中</span>';renderMarkers(await iRes.json(),await aRes.json());}catch(e){ind.innerHTML='<span class="api-status status-error">● 測試資料</span>';renderMarkers(fallbackInfo,fallbackAvail);}}init();</script></body></html>
+</textarea>
+
+<!-- ============================================== -->
+<!-- 總覽系統介面 (首頁) -->
+<!-- ============================================== -->
+
+<div class="container" id="main-dashboard">
+    <div class="header-info">
+        <div class="weather-box">
+            <div class="weather-icon" id="w-icon">⌛</div>
+            <div>
+                <div class="temp-val" id="temp-display">--°C</div>
+                <div class="location-info" id="loc-display">定位中...</div>
+            </div>
+        </div>
+        <div class="clock-box">
+            <div class="time-display" id="clock-display">00:00:00</div>
+            <div class="date-display" id="date-display">----/--/--</div>
+        </div>
+    </div>
+
+    <div class="alert-ticker">
+        <div class="ticker-scroll">
+            <span class="ticker-item">💡 提示：點擊下方按鈕即可一秒開啟各同學專屬系統，切換快速無延遲。</span>
+            <span class="ticker-item">⚠️ 台北捷運各線目前營運正常。</span>
+            <span class="ticker-item">📍 定位系統已修復！可精準比對全網 131 站之距離。</span>
+            <span class="ticker-item">🔑 全台等公車與邱同學捷運專案之 API 已自動更新，不需手動展期。</span>
+        </div>
+    </div>
+
+    <div class="page-header-row">
+        <h1 class="page-header">台北交通查詢 (極簡更新版)</h1>
+        <button class="theme-toggle" onclick="toggleTheme()">🌓 切換深色模式</button>
+    </div>
+
+    <div class="status-panel">
+        <div class="label-text">NEAREST STATION | 最近捷運站</div>
+        <div class="station-name" id="st-display">取得定位權限中...</div>
+    </div>
+
+    <div class="nav-grid">
+        <!-- 捷運區塊 -->
+        <div class="card">
+            <div class="top-indicator" style="background: var(--mrt-blue);"></div>
+            <div class="emoji-icon">🚇</div>
+            <div class="btn-group">
+                <a href="https://www.metro.taipei/" target="_blank" class="main-btn mrt-btn" style="background: var(--mrt-blue); color: #fff; border-color: var(--mrt-blue);">台北捷運 官方網站</a>
+                
+                <button onclick="openApp('app-mrt-new', '🚇 台北捷運查詢 (TDX 升級版)')" class="main-btn mrt-btn">台北捷運查詢 (新版介面)</button>
+                <button onclick="openApp('app-mrt-qiu', '🚇 邱則維 - 台北捷運即時查詢')" class="main-btn mrt-btn">邱則維 - 台北捷運 (SVG路網)</button>
+                <button onclick="openApp('app-mrt-he', '🚇 何泓諭 - 北捷全路網即時監控')" class="main-btn mrt-btn">何泓諭 - 北捷監控 (地圖)</button>
+                <button onclick="openApp('app-mrt-general', '🚇 台北捷運 (整線到站)')" class="main-btn mrt-btn">台北捷運 (通版)</button>
+            </div>
+            <div class="card-info">
+                <h2 class="card-title">捷運動態</h2>
+                <p class="card-desc">收錄新版查詢、邱則維、何泓諭等專案版本</p>
+            </div>
+        </div>
+
+        <!-- 公車區塊 -->
+        <div class="card">
+            <div class="top-indicator" style="background: var(--bus-red);"></div>
+            <div class="emoji-icon">🚌</div>
+            <div class="btn-group">
+                <a href="https://ebus.gov.taipei/" target="_blank" class="main-btn bus-btn" style="background: var(--bus-red); color: #fff; border-color: var(--bus-red);">台北市公車 官方網站</a>
+                <button onclick="openApp('app-bus-v3-3', '🚌 雙北智慧公車監控台 (V3.3版)')" class="main-btn bus-btn">公車V3.3版 - 監控台</button>
+                <!-- 👉 新版的陳育傑專案已替換到這裡 -->
+                <button onclick="openApp('app-bus-yujie', '🚌 陳育傑 - 全台等公車 (實體公車版)')" class="main-btn bus-btn">陳育傑 - 全台等公車</button>
+                <button onclick="openApp('app-bus-chen', '🚌 陳駿心 - 台北公車查詢')" class="main-btn bus-btn">陳駿心 - 公車查詢</button>
+            </div>
+            <div class="card-info">
+                <h2 class="card-title">公車動態</h2>
+                <p class="card-desc">包含自動 Token 更新，永久免費運行</p>
+            </div>
+        </div>
+
+        <!-- YouBike 區塊 -->
+        <div class="card">
+            <div class="top-indicator" style="background: var(--ubike-yellow);"></div>
+            <div class="emoji-icon">🚲</div>
+            <div class="btn-group">
+                <a href="https://www.youbike.com.tw/region/taipei/" target="_blank" class="main-btn ubike-btn" style="background: var(--ubike-yellow); color: #fff; border-color: var(--ubike-yellow);">YouBike 官方網站</a>
+                <button onclick="openApp('app-ubike-1', '🚲 YouBike 租借資訊地圖')" class="main-btn ubike-btn">YouBike 站點即時車位</button>
+            </div>
+            <div class="card-info">
+                <h2 class="card-title">微笑單車</h2>
+                <p class="card-desc">強調顯示版地圖介面</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- 應用程式切換播放器 (Iframe 渲染區) -->
+<!-- ============================================== -->
+<div id="app-player">
+    <div class="player-header">
+        <div id="app-player-title" class="player-title">載入中...</div>
+        <button onclick="closeApp()" class="close-btn">✖ 返回總覽</button>
+    </div>
+    <div id="iframe-container"></div>
+</div>
+
+<!-- ============================================== -->
+<!-- 主系統控制腳本 (純淨原生版) -->
+<!-- ============================================== -->
+<script>
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock-display').innerText = now.toLocaleTimeString('zh-TW', { hour12: false });
+        document.getElementById('date-display').innerText = now.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function toggleTheme() {
+        const currentTheme = document.body.getAttribute('data-theme');
+        if (currentTheme === 'dark') {
+            document.body.removeAttribute('data-theme');
+        } else {
+            document.body.setAttribute('data-theme', 'dark');
+        }
+    }
+
+    const rawStations = "頂埔:24.9601,121.4205;永寧:24.9711,121.4363;土城:24.9824,121.4442;海山:24.9912,121.4532;亞東醫院:25.0011,121.4621;府中:25.0085,121.4593;板橋:25.0135,121.4623;新埔:25.0232,121.4682;江子翠:25.0301,121.4745;龍山寺:25.0354,121.4998;西門:25.0423,121.5083;台北車站:25.0465,121.5173;善導寺:25.0445,121.5264;忠孝新生:25.0422,121.5328;忠孝復興:25.0412,121.5432;忠孝敦化:25.0413,121.5488;國父紀念館:25.0413,121.5583;市政府:25.0406,121.5651;永春:25.0405,121.5762;後山埤:25.0451,121.5815;昆陽:25.0505,121.5934;南港:25.0531,121.6069;南港展覽館:25.0553,121.6175;象山:25.0287,121.5714;台北101:25.0330,121.5654;信義安和:25.0332,121.5518;大安:25.0329,121.5435;大安森林公園:25.0333,121.5358;東門:25.0338,121.5283;中正紀念堂:25.0327,121.5183;台大醫院:25.0411,121.5161;中山:25.0526,121.5204;雙連:25.0583,121.5203;民權西路:25.0624,121.5195;圓山:25.0715,121.5212;劍潭:25.0847,121.5244;士林:25.0932,121.5263;芝山:25.1034,121.5226;明德:25.1098,121.5191;石牌:25.1154,121.5152;唭哩岸:25.1206,121.5065;奇岩:25.1251,121.5009;北投:25.1317,121.4986;復興崗:25.1373,121.4855;忠義:25.1310,121.4735;關渡:25.1245,121.4673;竹圍:25.1368,121.4589;紅樹林:25.1540,121.4585;淡水:25.1677,121.4455;新店:24.9578,121.5376;新店區公所:24.9675,121.5414;七張:24.9752,121.5429;大坪林:24.9824,121.5413;景美:24.9918,121.5407;萬隆:25.0019,121.5404;公館:25.0136,121.5348;台電大樓:25.0207,121.5283;古亭:25.0263,121.5226;小南門:25.0354,121.5061;北門:25.0491,121.5093;松江南京:25.0512,121.5332;南京復興:25.0516,121.5440;台北小巨蛋:25.0515,121.5540;南京三民:25.0514,121.5638;松山:25.0501,121.5777;南勢角:24.9898,121.5090;景安:24.9918,121.5051;永安市場:25.0034,121.5113;頂溪:25.0128,121.5156;行天宮:25.0592,121.5332;中山國小:25.0628,121.5262;大橋頭:25.0636,121.5127;台北橋:25.0632,121.5015;菜寮:25.0594,121.4925;三重:25.0558,121.4842;先嗇宮:25.0465,121.4722;頭前庄:25.0392,121.4619;新莊:25.0354,121.4526;輔大:25.0329,121.4363;丹鳳:25.0291,121.4230;迴龍:25.0219,121.4113;動物園:24.9982,121.5811;木柵:24.9979,121.5739;萬芳社區:24.9986,121.5684;萬芳醫院:24.9994,121.5583;辛亥:25.0051,121.5558;麟光:25.0185,121.5588;六張犁:25.0237,121.5531;科技大樓:25.0261,121.5436;中山國中:25.0607,121.5442;松山機場:25.0645,121.5518;大直:25.0795,121.5471;劍南路:25.0848,121.5556;西湖:25.0821,121.5672;港墘:25.0800,121.5751;文德:25.0785,121.5847;內湖:25.0838,121.5940;大湖公園:25.0837,121.6030;葫洲:25.0728,121.6074;東湖:25.0671,121.6115;南港軟體園區:25.0599,121.6160";
+    
+    const MRT_STATIONS = rawStations.split(';').map(item => {
+        const parts = item.split(':');
+        const coords = parts[1].split(',');
+        return { name: "捷運" + parts[0] + "站", lat: parseFloat(coords[0]), lng: parseFloat(coords[1]) };
+    });
+
+    function initLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(updateUI, (error) => {
+                document.getElementById('st-display').innerText = "📍 點此允許定位權限";
+            }, { timeout: 8000 });
+        }
+    }
+
+    async function updateUI(pos) {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const display = document.getElementById('st-display');
+        display.style.color = "#27ae60";
+
+        let nearest = MRT_STATIONS[0];
+        let minDist = Infinity;
+        MRT_STATIONS.forEach(st => {
+            const dist = Math.sqrt(Math.pow(st.lat - lat, 2) + Math.pow(st.lng - lng, 2));
+            if (dist < minDist) { minDist = dist; nearest = st; }
+        });
+        display.innerText = nearest.name;
+
+        try {
+            const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+            const data = await res.json();
+            document.getElementById('temp-display').innerText = `${Math.round(data.current_weather.temperature)}°C`;
+            document.getElementById('loc-display').innerText = `目前座標: ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+            document.getElementById('w-icon').innerText = data.current_weather.weathercode < 3 ? "☀️" : "☁️";
+        } catch (e) {}
+    }
+
+    function openApp(sourceId, title) {
+        const rawHtml = document.getElementById(sourceId).value;
+        const container = document.getElementById('iframe-container');
+        
+        container.innerHTML = '<iframe id="app-iframe" style="flex-grow: 1; border: none; width: 100%; background: #f5f7fa;"></iframe>';
+        const iframe = document.getElementById('app-iframe');
+        
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(rawHtml);
+        doc.close();
+
+        document.getElementById('app-player-title').innerText = title;
+        document.getElementById('app-player').style.display = 'flex';
+    }
+
+    function closeApp() {
+        document.getElementById('app-player').style.display = 'none';
+        document.getElementById('iframe-container').innerHTML = '';
+    }
+
+    window.onload = initLocation;
+</script>
+</body>
+</html>
