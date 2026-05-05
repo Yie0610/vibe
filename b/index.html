@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📁 檔案詳細資料清單</title>
 
-    <!-- ========================================== -->
-    <!-- 🛠️ 核心設定區塊 -->
-    <!-- ========================================== -->
     <script>
         const CONFIG = {
             owner: 'yie0610',
@@ -17,8 +14,6 @@
             passwordHash: '493df9116ac66615f686d24508b0d3894902a5c3b4f3ea98099809c691eee357' 
         };
     </script>
-    <!-- ========================================== -->
-
     <style>
         :root {
             --bg-color: #f3f4f6; --card-bg: white; --text-color: #333; --text-muted: #6b7280;
@@ -80,7 +75,6 @@
 </head>
 <body>
 
-    <!-- 🔐 密碼登入區塊 -->
     <div class="login-container" id="login-section">
         <h2>🔒 私人檔案庫</h2>
         <p style="color: var(--text-muted); font-size: 14px;">請輸入存取密碼以查看內容</p>
@@ -90,7 +84,6 @@
         <div id="login-error">密碼錯誤，請重試！</div>
     </div>
 
-    <!-- 📁 主要檔案清單區塊 -->
     <div class="container" id="main-app">
         <div class="header-section">
             <h1>📁 檔案清單</h1>
@@ -234,7 +227,8 @@
                 })
                 .then(data => {
                     if (!Array.isArray(data)) throw new Error('回傳格式錯誤');
-                    allFiles = data.filter(item => item.name.toLowerCase() !== 'index.html').map(item => {
+                    // 👇 這裡已經移除了過濾 index.html 的條件
+                    allFiles = data.map(item => {
                         const isDir = item.type === 'dir';
                         return {
                             ...item,
