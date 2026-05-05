@@ -4,209 +4,387 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📁 檔案詳細資料清單</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f3f4f6;
-            color: #333;
-            max-width: 900px;
-            margin: 40px auto;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            overflow: hidden;
-            padding: 20px;
-        }
-        .header-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 15px;
-            margin-bottom: 10px;
-        }
-        h1 { margin: 0; font-size: 24px; }
 
-        /* --- 💡 開關樣式設定 --- */
-        .switch-container {
-            display: flex;
-            align-items: center;
-            font-size: 14px;
-            color: #6b7280;
+    <!-- ========================================== -->
+    <!-- 🛠️ 核心設定區塊 (修改密碼與路徑請在這裡設定) -->
+    <!-- ========================================== -->
+    <script>
+        const CONFIG = {
+            owner: 'yie0610',
+            repo: 'vibe',
+            lockedRootFolder: 'b', // 鎖定的最外層資料夾
+            
+            // 👇 您專屬的密碼雜湊值
+            passwordHash: '8368ec5f1a153787469953cac4a39bce1c1e9273175a0a39db0810d0c7d0273d' 
+        };
+    </script>
+    <!-- ========================================== -->
+
+    <style>
+        :root {
+            --bg-color: #f3f4f6; --card-bg: white; --text-color: #333; --text-muted: #6b7280;
+            --border-color: #e5e7eb; --th-bg: #f9fafb; --hover-bg: #f3f4f6; --link-color: #2563eb;
+            --accent-color: #3b82f6; --error-bg: #fee2e2; --error-color: #ef4444;
         }
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 22px;
-            margin-right: 8px;
+        body.dark-mode {
+            --bg-color: #111827; --card-bg: #1f2937; --text-color: #f9fafb; --text-muted: #9ca3af;
+            --border-color: #374151; --th-bg: #111827; --hover-bg: #374151; --link-color: #60a5fa;
+            --accent-color: #60a5fa; --error-bg: #7f1d1d; --error-color: #fca5a5;
         }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); max-width: 950px; margin: 40px auto; padding: 20px; transition: 0.3s; }
+        .container { background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; padding: 25px; transition: 0.3s; display: none; }
+        
+        /* --- 🔐 登入介面樣式 --- */
+        .login-container { max-width: 400px; margin: 100px auto; background: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
+        .login-container h2 { margin-top: 0; color: var(--text-color); }
+        .pwd-input { width: 80%; padding: 12px; margin: 20px 0; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; background: var(--bg-color); color: var(--text-color); outline: none; }
+        .pwd-input:focus { border-color: var(--accent-color); }
+        .btn-submit { background-color: var(--accent-color); color: white; border: none; padding: 12px 25px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        .btn-submit:hover { opacity: 0.9; transform: translateY(-2px); }
+        #login-error { color: var(--error-color); margin-top: 10px; font-size: 14px; display: none; }
+
+        /* --- 標題與工具列區塊 --- */
+        .header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; margin-bottom: 10px; }
+        h1 { margin: 0; font-size: 26px; }
+        .theme-toggle { background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .theme-toggle:hover { background-color: var(--hover-bg); }
+        .breadcrumbs { padding: 5px 0 20px 0; font-size: 15px; color: var(--text-muted); }
+        .breadcrumb-link { color: var(--link-color); text-decoration: none; font-weight: 500; }
+        .breadcrumb-link:hover { text-decoration: underline; }
+        .separator { margin: 0 8px; color: var(--text-muted); }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px; }
+        .search-input { flex-grow: 1; max-width: 300px; padding: 10px 15px; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--bg-color); color: var(--text-color); outline: none; font-size: 14px; }
+        .switch-container { display: flex; align-items: center; font-size: 14px; color: var(--text-muted); }
+        .switch { position: relative; display: inline-block; width: 42px; height: 24px; margin-right: 10px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 16px; width: 16px;
-            left: 3px; bottom: 3px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        input:checked + .slider { background-color: #2563eb; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent-color); }
         input:checked + .slider:before { transform: translateX(18px); }
 
-        /* --- 表格樣式 --- */
+        /* --- 表格 --- */
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-        th { background-color: #f9fafb; font-weight: 600; color: #4b5563; }
-        tr:hover { background-color: #f3f4f6; }
-        a { text-decoration: none; color: #2563eb; font-weight: 500; display: flex; align-items: center; }
-        .icon { margin-right: 8px; font-size: 1.2em; }
-        .time-cell { font-size: 0.9em; color: #9ca3af; }
-        .time-active { color: #333; }
+        th, td { padding: 14px 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background-color: var(--th-bg); font-weight: 600; color: var(--text-color); cursor: pointer; user-select: none; transition: 0.2s; }
+        th:hover { background-color: var(--border-color); }
+        .sort-icon { font-size: 0.8em; margin-left: 5px; color: var(--text-muted); }
+        tr:hover { background-color: var(--hover-bg); }
+        .file-name-cell { display: flex; justify-content: space-between; align-items: center; }
+        .file-link { text-decoration: none; color: var(--link-color); font-weight: 500; display: flex; align-items: center; flex-grow: 1; }
+        .file-link:hover { text-decoration: underline; }
+        .icon { margin-right: 10px; font-size: 1.3em; }
+        .time-cell { font-size: 0.9em; color: var(--text-muted); }
+        .time-active { color: var(--text-color); }
+        .download-btn { text-decoration: none; opacity: 0.4; transition: 0.2s; font-size: 1.1em; padding: 5px; }
+        .download-btn:hover { opacity: 1; transform: scale(1.1); }
     </style>
 </head>
 <body>
 
-    <div class="container">
+    <!-- 🔐 密碼登入區塊 -->
+    <div class="login-container" id="login-section">
+        <h2>🔒 私人檔案庫</h2>
+        <p style="color: var(--text-muted); font-size: 14px;">請輸入存取密碼以查看內容</p>
+        <input type="password" id="pwdInput" class="pwd-input" placeholder="輸入密碼..." onkeypress="if(event.key === 'Enter') verifyPassword()">
+        <br>
+        <button class="btn-submit" onclick="verifyPassword()">解鎖進入</button>
+        <div id="login-error">密碼錯誤，請重試！</div>
+    </div>
+
+    <!-- 📁 主要檔案清單區塊 -->
+    <div class="container" id="main-app">
         <div class="header-section">
             <h1>📁 檔案清單</h1>
+            <button id="themeToggleBtn" class="theme-toggle">🌙 暗色模式</button>
+        </div>
+        <div id="breadcrumbs" class="breadcrumbs"></div>
+        <div class="toolbar">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜尋檔案或副檔名...">
             <div class="switch-container">
-                <label class="switch">
-                    <input type="checkbox" id="timeToggle">
-                    <span class="slider"></span>
-                </label>
-                <span>顯示修改時間</span>
+                <label class="switch"><input type="checkbox" id="timeToggle"><span class="slider"></span></label>
+                <span>顯示最後修改時間</span>
             </div>
         </div>
-        
         <table>
             <thead>
                 <tr>
-                    <th style="width: 40%;">檔案名稱</th>
-                    <th style="width: 15%;">類型</th>
-                    <th style="width: 20%;">大小</th>
-                    <th style="width: 25%;">最後修改時間</th>
+                    <th style="width: 45%;" onclick="sortTable('name')">檔案名稱 <span id="sort-icon-name" class="sort-icon"></span></th>
+                    <th style="width: 15%;" onclick="sortTable('type')">類型 <span id="sort-icon-type" class="sort-icon"></span></th>
+                    <th style="width: 15%;" onclick="sortTable('size')">大小 <span id="sort-icon-size" class="sort-icon"></span></th>
+                    <th style="width: 25%;" onclick="sortTable('time')">最後修改時間 <span id="sort-icon-time" class="sort-icon"></span></th>
                 </tr>
             </thead>
             <tbody id="file-list">
-                <tr><td colspan="4" style="text-align: center;">載入中...</td></tr>
+                <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">載入中...</td></tr>
             </tbody>
         </table>
     </div>
 
     <script>
-        const owner = 'yie0610';
-        const repo = 'vibe';
-        let allFiles = []; 
-
-        // 自動路徑偵測邏輯
-        let currentPath = window.location.pathname.replace(/index\.html$/, '');
-        const repoPrefix = `/${repo}/`;
-        if (currentPath.startsWith(repoPrefix)) currentPath = currentPath.substring(repoPrefix.length);
-        currentPath = currentPath.replace(/^\/+/, '').replace(/\/+$/, '');
+        // ==========================================
+        // 🔐 登入與驗證邏輯
+        // ==========================================
+        const SESSION_KEY = `auth_${CONFIG.repo}`;
         
-        // 將空白路徑轉換為根目錄的標記，避免 API 錯誤
-        const apiPath = currentPath === '' ? '' : `${currentPath}`;
-        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${apiPath}`;
+        if (sessionStorage.getItem(SESSION_KEY) === 'true') {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            initApp(); 
+        }
 
-        // 1. 初始化讀取檔案清單 (加上嚴格的錯誤捕捉)
-        fetch(apiUrl)
-            .then(res => {
-                if (!res.ok) {
-                    if(res.status === 403) throw new Error('API 呼叫次數達上限 (403)');
-                    if(res.status === 404) throw new Error('找不到資料夾 (404)');
-                    throw new Error(`連線錯誤碼: ${res.status}`);
-                }
-                return res.json();
-            })
-            .then(data => {
-                // 防呆：確保回傳的是陣列
-                if (!Array.isArray(data)) throw new Error('回傳格式錯誤，這可能不是一個資料夾');
+        async function verifyPassword() {
+            const pwd = document.getElementById('pwdInput').value;
+            const errorMsg = document.getElementById('login-error');
+            
+            // 🌟 【隱藏密技】：自動產生 Hash 密碼
+            if (pwd.startsWith('##')) {
+                const newPwd = pwd.substring(2);
+                if (!newPwd) { alert("請輸入想要的新密碼，例如：##5678"); return; }
                 
-                allFiles = data.filter(item => item.name !== 'index.html');
-                renderFileList();
-            })
-            .catch(error => {
-                // 將錯誤訊息直接印在表格裡
-                console.error("詳細錯誤:", error);
-                const tbody = document.getElementById('file-list');
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="4" style="text-align: center; color: #ef4444; background-color: #fee2e2; padding: 20px;">
-                            <strong>讀取失敗 ❌</strong><br><br>
-                            錯誤原因：${error.message}<br>
-                            系統嘗試讀取的路徑為：<code>[${apiPath}]</code><br>
-                            <span style="font-size: 0.8em; color: #7f1d1d;">(如果上方路徑不正確，代表網址解析邏輯需要微調，或請確認您已推送到 GitHub 上)</span>
-                        </td>
-                    </tr>`;
-            });
-
-        function renderFileList() {
-            const tbody = document.getElementById('file-list');
-            tbody.innerHTML = '';
-            if (allFiles.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">此資料夾沒有檔案。</td></tr>';
+                const encoder = new TextEncoder();
+                const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(newPwd));
+                const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                try {
+                    await navigator.clipboard.writeText(hashHex);
+                    alert(`✅ 產生成功！\n\n新密碼【 ${newPwd} 】的加密代碼，已經為您「自動複製」了！\n\n請直接開啟 VS Code 貼到檔案最上方的 CONFIG 區塊，並 Push 上傳即可。`);
+                } catch(err) {
+                    prompt(`✅ 產生成功！請手動複製以下代碼，並去替換檔案最上方的 CONFIG 區塊：`, hashHex);
+                }
+                document.getElementById('pwdInput').value = '';
                 return;
             }
 
-            allFiles.forEach((item, index) => {
-                const isDir = item.type === 'dir';
-                const sizeStr = isDir ? '-' : (item.size >= 1048576 ? (item.size / 1048576).toFixed(2) + ' MB' : (item.size / 1024).toFixed(2) + ' KB');
-                const ext = isDir ? '資料夾' : (item.name.includes('.') ? item.name.split('.').pop().toUpperCase() + ' 檔案' : '檔案');
+            // 一般登入驗證
+            const encoder = new TextEncoder();
+            const data = encoder.encode(pwd);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><a href="${item.name}"><span class="icon">${isDir ? '🗂️' : '📄'}</span> ${item.name}</a></td>
-                    <td>${ext}</td>
-                    <td>${sizeStr}</td>
-                    <td class="time-cell" id="time-${index}">--</td>
-                `;
-                tbody.appendChild(tr);
-            });
+            if (hashHex === CONFIG.passwordHash) {
+                sessionStorage.setItem(SESSION_KEY, 'true');
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+                initApp();
+            } else {
+                errorMsg.style.display = 'block';
+            }
         }
 
-        // 2. 當開關被點擊時，開始查詢時間
-        document.getElementById('timeToggle').addEventListener('change', function() {
-            if (this.checked) fetchTimestamps();
-        });
+        // ==========================================
+        // 🚀 主程式邏輯
+        // ==========================================
+        function initApp() {
+            let allFiles = []; 
+            let currentSort = { column: '', isAsc: true };
 
-        function fetchTimestamps() {
-            allFiles.forEach((item, index) => {
-                const timeElement = document.getElementById(`time-${index}`);
-                if (timeElement.textContent !== '--' && timeElement.textContent !== '讀取中...') return; 
-
-                timeElement.textContent = '讀取中...';
-                
-                fetch(`https://api.github.com/repos/${owner}/${repo}/commits?path=${item.path}&per_page=1`)
-                    .then(res => {
-                        if (!res.ok) throw new Error('API limit');
-                        return res.json();
-                    })
-                    .then(commits => {
-                        if (commits && commits.length > 0) {
-                            const date = new Date(commits[0].commit.author.date);
-                            timeElement.textContent = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-                            timeElement.classList.add('time-active');
-                        } else {
-                            timeElement.textContent = '無紀錄';
-                        }
-                    })
-                    .catch(() => {
-                        timeElement.textContent = '次數達標';
-                        timeElement.style.color = '#ef4444';
-                    });
+            const themeBtn = document.getElementById('themeToggleBtn');
+            if (localStorage.getItem('theme') === 'dark') {
+                document.body.classList.add('dark-mode');
+                themeBtn.innerHTML = '☀️ 亮色模式';
+            }
+            themeBtn.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode');
+                const isDark = document.body.classList.contains('dark-mode');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                themeBtn.innerHTML = isDark ? '☀️ 亮色模式' : '🌙 暗色模式';
             });
+
+            let currentPath = window.location.pathname.replace(/index\.html$/, '');
+            const repoPrefix = `/${CONFIG.repo}/`;
+            if (currentPath.startsWith(repoPrefix)) currentPath = currentPath.substring(repoPrefix.length);
+            currentPath = currentPath.replace(/^\/+/, '').replace(/\/+$/, '');
+            
+            function initBreadcrumbs() {
+                let base = window.location.pathname;
+                if (currentPath !== '') base = base.substring(0, base.lastIndexOf(currentPath));
+                
+                let pathParts = currentPath.split('/').filter(p => p);
+                let lockIndex = -1;
+                if (CONFIG.lockedRootFolder !== '') {
+                    lockIndex = pathParts.indexOf(CONFIG.lockedRootFolder);
+                }
+
+                let html = '';
+                let accum = base;
+
+                if (lockIndex !== -1) {
+                    for(let i=0; i<=lockIndex; i++) accum += pathParts[i] + '/';
+                    html = `<a href="${accum}" class="breadcrumb-link">🏠 首頁 (${CONFIG.lockedRootFolder})</a>`;
+                    for(let i = lockIndex + 1; i < pathParts.length; i++) {
+                        accum += pathParts[i] + '/';
+                        if (i === pathParts.length - 1) {
+                            html += `<span class="separator">/</span> <span style="color: var(--text-color); font-weight: bold;">${pathParts[i]}</span>`;
+                        } else {
+                            html += `<span class="separator">/</span> <a href="${accum}" class="breadcrumb-link">${pathParts[i]}</a>`;
+                        }
+                    }
+                } else {
+                    html = `<a href="${base}" class="breadcrumb-link">🏠 首頁</a>`;
+                    pathParts.forEach((p, index) => {
+                        accum += p + '/';
+                        if (index === pathParts.length - 1) {
+                            html += `<span class="separator">/</span> <span style="color: var(--text-color); font-weight: bold;">${p}</span>`;
+                        } else {
+                            html += `<span class="separator">/</span> <a href="${accum}" class="breadcrumb-link">${p}</a>`;
+                        }
+                    });
+                }
+                document.getElementById('breadcrumbs').innerHTML = html;
+            }
+            initBreadcrumbs();
+
+            const apiPath = currentPath === '' ? '' : `${currentPath}`;
+            const apiUrl = `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${apiPath}`;
+
+            fetch(apiUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error(res.status === 403 ? 'API 呼叫次數達上限' : (res.status === 404 ? '找不到資料夾' : `錯誤碼: ${res.status}`));
+                    return res.json();
+                })
+                .then(data => {
+                    if (!Array.isArray(data)) throw new Error('回傳格式錯誤');
+                    allFiles = data.map(item => {
+                        const isDir = item.type === 'dir';
+                        return {
+                            ...item,
+                            ext: isDir ? '0_dir' : (item.name.includes('.') ? item.name.split('.').pop().toLowerCase() : 'z_file'), 
+                            sizeValue: isDir ? -1 : item.size, 
+                            timeValue: 0,     
+                            timeDisplay: '--',
+                            uid: item.path.replace(/[^a-zA-Z0-9]/g, '_')
+                        };
+                    });
+                    
+                    window.sortTable = function(column) {
+                        if (currentSort.column === column) {
+                            currentSort.isAsc = !currentSort.isAsc;
+                        } else {
+                            currentSort.column = column;
+                            currentSort.isAsc = true;
+                        }
+                        ['name', 'type', 'size', 'time'].forEach(col => {
+                            const iconEl = document.getElementById(`sort-icon-${col}`);
+                            if (col === currentSort.column) {
+                                iconEl.textContent = currentSort.isAsc ? '▲' : '▼';
+                                iconEl.style.color = 'var(--accent-color)'; 
+                            } else {
+                                iconEl.textContent = '';
+                            }
+                        });
+                        allFiles.sort((a, b) => {
+                            let valA, valB;
+                            if (column === 'name') { valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); }
+                            else if (column === 'type') { valA = a.ext; valB = b.ext; }
+                            else if (column === 'size') { valA = a.sizeValue; valB = b.sizeValue; }
+                            else if (column === 'time') { valA = a.timeValue; valB = b.timeValue; }
+                            if (valA < valB) return currentSort.isAsc ? -1 : 1;
+                            if (valA > valB) return currentSort.isAsc ? 1 : -1;
+                            return 0;
+                        });
+                        renderFileList(); 
+                    }
+                    sortTable('name'); 
+                })
+                .catch(error => {
+                    document.getElementById('file-list').innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--error-color); background-color: var(--error-bg); padding: 20px;"><strong>讀取失敗 ❌</strong><br><br>錯誤原因：${error.message}</td></tr>`;
+                });
+
+            function getFileIcon(filename, isDir) {
+                if (isDir) return '🗂️';
+                const ext = filename.split('.').pop().toLowerCase();
+                const iconMap = {
+                    'html':'💻', 'css':'💻', 'js':'💻', 'py':'💻', 'cpp':'💻', 'pdf':'📕',
+                    'stl':'🧊', 'gcode':'🧊', 'jpg':'🖼️', 'png':'🖼️', 'zip':'📦', 'rar':'📦',
+                    'md':'📝', 'txt':'📝', 'json':'⚙️', 'mp4':'🎬', 'mp3':'🎵', 'xlsx':'📊', 'docx':'📄'
+                };
+                return iconMap[ext] || '📄';
+            }
+
+            document.getElementById('searchInput').addEventListener('input', renderFileList);
+
+            function renderFileList() {
+                const tbody = document.getElementById('file-list');
+                tbody.innerHTML = '';
+                
+                const query = document.getElementById('searchInput').value.toLowerCase();
+                const filteredFiles = allFiles.filter(item => item.name.toLowerCase().includes(query));
+
+                if (filteredFiles.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-muted);">沒有找到符合「${query}」的檔案 🧐</td></tr>`;
+                    return;
+                }
+
+                filteredFiles.forEach(item => {
+                    const isDir = item.type === 'dir';
+                    const sizeStr = isDir ? '-' : (item.size >= 1048576 ? (item.size / 1048576).toFixed(2) + ' MB' : (item.size / 1024).toFixed(2) + ' KB');
+                    const ext = isDir ? '資料夾' : (item.name.includes('.') ? item.name.split('.').pop().toUpperCase() + ' 檔案' : '檔案');
+                    const icon = getFileIcon(item.name, isDir);
+                    
+                    const linkTarget = isDir ? '' : ' target="_blank" rel="noopener noreferrer"';
+                    const downloadBtn = isDir ? '' : `<a href="${item.name}" download class="download-btn" title="下載 ${item.name}">📥</a>`;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <div class="file-name-cell">
+                                <a href="${item.name}" class="file-link"${linkTarget}>
+                                    <span class="icon">${icon}</span> ${item.name}
+                                </a>
+                                ${downloadBtn}
+                            </div>
+                        </td>
+                        <td style="color: var(--text-muted);">${ext}</td>
+                        <td style="color: var(--text-muted);">${sizeStr}</td>
+                        <td class="time-cell ${item.timeValue > 0 ? 'time-active' : ''}" id="time-${item.uid}">${item.timeDisplay}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('timeToggle').addEventListener('change', function() {
+                if (this.checked) fetchTimestamps();
+            });
+
+            function fetchTimestamps() {
+                allFiles.forEach(item => {
+                    if (item.timeDisplay !== '--' && item.timeDisplay !== '讀取中...') return; 
+                    item.timeDisplay = '讀取中...';
+                    updateTimeCell(item.uid, item.timeDisplay, false);
+                    
+                    fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/commits?path=${item.path}&per_page=1`)
+                        .then(res => {
+                            if (!res.ok) throw new Error('API limit');
+                            return res.json();
+                        })
+                        .then(commits => {
+                            if (commits && commits.length > 0) {
+                                const date = new Date(commits[0].commit.author.date);
+                                item.timeValue = date.getTime(); 
+                                item.timeDisplay = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+                                updateTimeCell(item.uid, item.timeDisplay, true);
+                            } else {
+                                item.timeDisplay = '無紀錄';
+                                updateTimeCell(item.uid, item.timeDisplay, false);
+                            }
+                            if (currentSort.column === 'time') renderFileList();
+                        })
+                        .catch(() => {
+                            item.timeDisplay = '次數達標';
+                            const el = document.getElementById(`time-${item.uid}`);
+                            if(el) { el.textContent = item.timeDisplay; el.style.color = 'var(--error-color)'; }
+                        });
+                });
+            }
+
+            function updateTimeCell(uid, text, isActive) {
+                const el = document.getElementById(`time-${uid}`);
+                if (el) {
+                    el.textContent = text;
+                    if (isActive) el.classList.add('time-active');
+                }
+            }
         }
     </script>
 </body>
