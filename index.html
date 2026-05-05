@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📁 檔案詳細資料清單</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+            color: #333;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+            padding: 20px;
+        }
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        h1 { margin: 0; font-size: 24px; }
+
+        /* --- 💡 開關樣式設定 --- */
+        .switch-container {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+            margin-right: 8px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px; width: 16px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #2563eb; }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        /* --- 表格樣式 --- */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f9fafb; font-weight: 600; color: #4b5563; }
+        tr:hover { background-color: #f3f4f6; }
+        a { text-decoration: none; color: #2563eb; font-weight: 500; display: flex; align-items: center; }
+        .icon { margin-right: 8px; font-size: 1.2em; }
+        .time-cell { font-size: 0.9em; color: #9ca3af; }
+        .time-active { color: #333; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-section">
+            <h1>📁 檔案清單</h1>
+            <div class="switch-container">
+                <label class="switch">
+                    <input type="checkbox" id="timeToggle">
+                    <span class="slider"></span>
+                </label>
+                <span>顯示修改時間</span>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%;">檔案名稱</th>
+                    <th style="width: 15%;">類型</th>
+                    <th style="width: 20%;">大小</th>
+                    <th style="width: 25%;">最後修改時間</th>
+                </tr>
+            </thead>
+            <tbody id="file-list">
+                <tr><td colspan="4" style="text-align: center;">載入中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const owner = 'yie0610';
+        const repo = 'vibe';
+        let allFiles = []; 
+
+        // 自動路徑偵測邏輯
+        let currentPath = window.location.pathname.replace(/index\.html$/, '');
+        const repoPrefix = `/${repo}/`;
+        if (currentPath.startsWith(repoPrefix)) currentPath = currentPath.substring(repoPrefix.length);
+        currentPath = currentPath.replace(/^\/+/, '').replace(/\/+$/, '');
+        
+        // 將空白路徑轉換為根目錄的標記，避免 API 錯誤
+        const apiPath = currentPath === '' ? '' : `${currentPath}`;
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${apiPath}`;
+
+        // 1. 初始化讀取檔案清單 (加上嚴格的錯誤捕捉)
+        fetch(apiUrl)
+            .then(res => {
+                if (!res.ok) {
+                    if(res.status === 403) throw new Error('API 呼叫次數達上限 (403)');
+                    if(res.status === 404) throw new Error('找不到資料夾 (404)');
+                    throw new Error(`連線錯誤碼: ${res.status}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                // 防呆：確保回傳的是陣列
+                if (!Array.isArray(data)) throw new Error('回傳格式錯誤，這可能不是一個資料夾');
+                
+                allFiles = data.filter(item => item.name !== 'index.html');
+                renderFileList();
+            })
+            .catch(error => {
+                // 將錯誤訊息直接印在表格裡
+                console.error("詳細錯誤:", error);
+                const tbody = document.getElementById('file-list');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #ef4444; background-color: #fee2e2; padding: 20px;">
+                            <strong>讀取失敗 ❌</strong><br><br>
+                            錯誤原因：${error.message}<br>
+                            系統嘗試讀取的路徑為：<code>[${apiPath}]</code><br>
+                            <span style="font-size: 0.8em; color: #7f1d1d;">(如果上方路徑不正確，代表網址解析邏輯需要微調，或請確認您已推送到 GitHub 上)</span>
+                        </td>
+                    </tr>`;
+            });
+
+        function renderFileList() {
+            const tbody = document.getElementById('file-list');
+            tbody.innerHTML = '';
+            if (allFiles.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">此資料夾沒有檔案。</td></tr>';
+                return;
+            }
+
+            allFiles.forEach((item, index) => {
+                const isDir = item.type === 'dir';
+                const sizeStr = isDir ? '-' : (item.size >= 1048576 ? (item.size / 1048576).toFixed(2) + ' MB' : (item.size / 1024).toFixed(2) + ' KB');
+                const ext = isDir ? '資料夾' : (item.name.includes('.') ? item.name.split('.').pop().toUpperCase() + ' 檔案' : '檔案');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><a href="${item.name}"><span class="icon">${isDir ? '🗂️' : '📄'}</span> ${item.name}</a></td>
+                    <td>${ext}</td>
+                    <td>${sizeStr}</td>
+                    <td class="time-cell" id="time-${index}">--</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 2. 當開關被點擊時，開始查詢時間
+        document.getElementById('timeToggle').addEventListener('change', function() {
+            if (this.checked) fetchTimestamps();
+        });
+
+        function fetchTimestamps() {
+            allFiles.forEach((item, index) => {
+                const timeElement = document.getElementById(`time-${index}`);
+                if (timeElement.textContent !== '--' && timeElement.textContent !== '讀取中...') return; 
+
+                timeElement.textContent = '讀取中...';
+                
+                fetch(`https://api.github.com/repos/${owner}/${repo}/commits?path=${item.path}&per_page=1`)
+                    .then(res => {
+                        if (!res.ok) throw new Error('API limit');
+                        return res.json();
+                    })
+                    .then(commits => {
+                        if (commits && commits.length > 0) {
+                            const date = new Date(commits[0].commit.author.date);
+                            timeElement.textContent = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+                            timeElement.classList.add('time-active');
+                        } else {
+                            timeElement.textContent = '無紀錄';
+                        }
+                    })
+                    .catch(() => {
+                        timeElement.textContent = '次數達標';
+                        timeElement.style.color = '#ef4444';
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
